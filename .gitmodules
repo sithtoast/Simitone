@@ -1,3 +1,4 @@
 [submodule "FreeSO"]
 	path = FreeSO
-	url = https://github.com/alexjyong/FreeSO
+	url = https://github.com/sithtoast/FreeSO
+	branch = ts1-lot-load-fixes

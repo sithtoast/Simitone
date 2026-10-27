@@ -24,7 +24,7 @@ namespace Simitone.Client.UI.Panels.Desktop
     /// <summary>
     /// The classic live mode strip along the bottom of the screen, right of the classic control panel: the selected
     /// Sim's portrait and the rest of the family, the mood gauge with the panel buttons, and the selected panel.
-    /// Needs is drawn with the original art; the other panels are Simitone's, scaled to fit the strip.
+    /// Needs, Job, Personality and Relationships are drawn with the original art; Inventory is Simitone's, scaled to fit.
     /// </summary>
     public class UIClassicLivePanel : UIContainer
     {
@@ -101,20 +101,18 @@ namespace Simitone.Client.UI.Panels.Desktop
             for (int i = 0; i < PanelButtons.Length; i++) PanelButtons[i].Selected = i == id;
             if (Panel != null) Remove(Panel);
 
-            if (id == 0) Panel = new UIClassicNeedsPanel(Game);
-            else
+            switch (id)
             {
-                UISubpanel sub = null;
-                switch (id)
-                {
-                    case 1: sub = new UIJobSubpanel(Game); break;
-                    case 2: sub = new UIPersonalitySubpanel(Game); break;
-                    case 3: sub = new UIRelationshipSubpanel(Game); break;
-                    case 4: sub = new UIInventorySubpanel(Game); break;
-                }
-                //made for the 128 high main panel; shrink it into the strip
-                sub.ScaleX = sub.ScaleY = StripHeight / sub.Size.Y;
-                Panel = sub;
+                case 0: Panel = new UIClassicNeedsPanel(Game); break;
+                case 1: Panel = new UIClassicJobPanel(Game); break;
+                case 2: Panel = new UIClassicPersonalityPanel(Game); break;
+                case 3: Panel = new UIClassicRelationshipPanel(Game, UIScreen.Current.ScreenWidth - (int)X - PanelX); break;
+                default:
+                    //made for the 128 high main panel; shrink it into the strip
+                    var sub = new UIInventorySubpanel(Game);
+                    sub.ScaleX = sub.ScaleY = StripHeight / sub.Size.Y;
+                    Panel = sub;
+                    break;
             }
             Panel.Position = new Vector2(PanelX, 0);
             Add(Panel);

@@ -22,6 +22,8 @@ namespace Simitone.LotRunner
     /// <summary>
     /// Plays TS1 lots headlessly (no window, graphics or sound), as fast as the VM can tick, and reports
     /// SimAntics exceptions, dialogs, objects arriving and leaving, and the household at the end.
+    /// It plays like a careful player: it answers No to yes/no questions (such as adopting a baby)
+    /// and calls the fire department when a fire starts, so the household stays the same between runs.
     /// Nothing is saved: the neighbourhood and lots are only read.
     ///
     /// Usage: Simitone.LotRunner -path "/path/to/The Sims/" [-user ~/Documents/Simitone/] [-hours 24] [-quiet] house...|all
@@ -35,6 +37,9 @@ namespace Simitone.LotRunner
     public class Program
     {
         private const int TicksPerGameMinute = 30;
+        private const uint FireFighterGUID = 0x14c180ba;
+        //game minutes to wait for the fire fighter before calling again (they usually take under an hour)
+        private const int FireCallRetry = 60;
 
         private static bool Quiet;
         private static int Exceptions;
@@ -174,6 +179,10 @@ namespace Simitone.LotRunner
             var left = new List<string>();
             //what each family member on the lot was last doing, to report it when they leave
             var familyOnLot = Avatars(vm, true).ToDictionary(x => x.Name, x => x.Thread.ActiveAction?.Name ?? "idle");
+            //game minute of the last fire department call, while a fire burns
+            int? fireCalled = null;
+            var fireReported = false;
+            var fireFighter = false;
             var ticks = hours * 60 * TicksPerGameMinute;
             for (int i = 1; i <= ticks; i++)
             {
@@ -203,6 +212,27 @@ namespace Simitone.LotRunner
                 foreach (var sim in familyOnLot.Keys.Except(familyNow.Keys)) Log(time + " " + sim + " left the lot (last doing " + familyOnLot[sim] + ")");
                 foreach (var sim in familyNow.Keys.Except(familyOnLot.Keys)) Log(time + " " + sim + " came back");
                 familyOnLot = familyNow;
+
+                var fireFighterNow = vm.Context.ObjectQueries.Avatars.Any(x => x.Object.OBJ.GUID == FireFighterGUID);
+                if (fireFighterNow != fireFighter) Log(time + " fire fighter " + (fireFighterNow ? "arrived" : "left"));
+                fireFighter = fireFighterNow;
+                var minute = i / TicksPerGameMinute;
+                if (!vm.Entities.Any(x => x.ToString() == "Fire"))
+                {
+                    if (fireReported) Log(time + " fire is out");
+                    fireCalled = null;
+                    fireReported = false;
+                }
+                //call when a fire starts, and again if nobody has come after a while (the caller can burn or not reach the phone);
+                //a smoke alarm (if the lot has one) calls them too
+                else if (!fireFighter && (fireCalled == null || minute - fireCalled >= FireCallRetry))
+                {
+                    var call = CallFireDepartment(vm);
+                    if (call != null) fireCalled = minute;
+                    //nobody home (at work or school) yet: try again every minute, but only say so once
+                    if (call != null || !fireReported) Log(time + " fire! " + (call ?? "nobody on the lot can call the fire department yet"));
+                    fireReported = true;
+                }
 
                 if (clock.Hours != lastHour)
                 {
@@ -252,6 +282,42 @@ namespace Simitone.LotRunner
             return names;
         }
 
+        /// <summary>
+        /// Has a family member phone the fire department, as a player would. Returns what happened, for the log,
+        /// or null if nobody can (everyone is at work or school, or there is no phone).
+        /// </summary>
+        private static string CallFireDepartment(VM vm)
+        {
+            //a sim who is awake and not panicking yet gets to the phone sooner
+            var family = Avatars(vm, true).OrderBy(x =>
+            {
+                var action = x.Thread.ActiveAction?.Name;
+                return (action == "Sleep" || action == "Nap") ? 2 : (action == "Fire!") ? 1 : 0;
+            });
+            var phones = vm.Entities.Where(x => x.ToString().Contains("Phone")).ToList();
+            foreach (var caller in family)
+            {
+                //sims away from the lot get no phone interactions
+                foreach (var phone in phones)
+                {
+                    var call = phone.GetPieMenu(vm, caller, false, true).FirstOrDefault(x => x.Name.EndsWith("Fire Dept."));
+                    if (call == null) continue;
+                    //interactions go to the selected sim, so select the caller first, as a player would
+                    vm.SendCommand(new VMNetChangeControlCmd { TargetID = caller.ObjectID });
+                    vm.SendCommand(new VMNetInteractionCmd
+                    {
+                        Interaction = call.ID,
+                        ActorUID = caller.PersistID,
+                        CalleeID = phone.ObjectID,
+                        Param0 = call.Param0,
+                        Global = call.Global
+                    });
+                    return caller.Name + " calls the fire department on the " + phone;
+                }
+            }
+            return null;
+        }
+
         private static string List(string label, IEnumerable<string> items)
         {
             var list = items.ToList();
@@ -273,11 +339,16 @@ namespace Simitone.LotRunner
                 return;
             }
             Log("dialog \"" + info.Title + "\": " + message);
-            //answer like a player who always takes the first option, so the VM keeps running
-            if (info.Block) Vm.SendCommand(new VMNetDialogResponseCmd
+            if (!info.Block) return;
+            //answer so the VM keeps running: No to questions, so nothing changes the household (adoption, moving in);
+            //otherwise the first button (OK)
+            var type = (info.Operand == null) ? VMDialogType.Message : info.Operand.Type;
+            var no = type == VMDialogType.YesNo || type == VMDialogType.YesNoCancel;
+            Log("  answered " + (no ? info.No ?? "No" : info.Yes ?? "OK"));
+            Vm.SendCommand(new VMNetDialogResponseCmd
             {
                 ActorUID = info.Caller?.PersistID ?? 0,
-                ResponseCode = 0,
+                ResponseCode = (byte)(no ? 1 : 0),
                 ResponseText = ""
             });
         }

@@ -547,6 +547,8 @@ cd Client/Simitone/Simitone.LotRunner/bin/Release/net9.0
 ./Simitone.LotRunner -path "/path/to/The Sims/" -hours 48 -quiet all
 ```
 
+It plays like a careful player, so households stay the same between runs: it answers No to yes/no questions (such as adopting a baby) and OK to everything else, and when a fire starts it has a family member call the fire department, calling again if nobody has come within an hour. Both show in the log.
+
 Saved lot states are read from Simitone's user folder like the game does (`-user` to choose another one). Rendering, sound and anything on screen aren't covered, so check those in the game.
 
 

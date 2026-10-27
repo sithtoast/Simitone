@@ -76,7 +76,7 @@ namespace Simitone.Client.UI.Panels
             if (Game.Desktop)
             {
                 DesktopUCP = new UIDesktopUCP(screen);
-                DesktopUCP.Position = new Vector2(15, screen.ScreenHeight - (278 + 15));
+                PlaceDesktopUCP();
                 DesktopUCP.OnModeClick += LiveButtonClicked;
                 Add(DesktopUCP);
             }
@@ -90,8 +90,7 @@ namespace Simitone.Client.UI.Panels
                 ExtendPanelBtn.Position = new Vector2(mode.X + 54, mode.Y - 50);
             }
 
-            MainPanel.X = 64 + 15;
-            if (Game.Desktop) MainPanel.X += 100;
+            MainPanel.X = MainPanelX();
             MainPanel.GameResized();
             MainPanel.Y = screen.ScreenHeight - (128 + 15);
             MainPanel.Visible = false;
@@ -298,9 +297,38 @@ namespace Simitone.Client.UI.Panels
             }
             else
             {
-                DesktopUCP.Position = new Vector2(15, Game.ScreenHeight - (278 + 15));
+                PlaceDesktopUCP();
             }
             MainPanel.Y = Game.ScreenHeight - (128 + 15);
+        }
+
+        /// <summary>
+        /// Replaces the desktop control panel, after the classic UI setting changes.
+        /// </summary>
+        public void RebuildDesktopUCP()
+        {
+            if (DesktopUCP == null) return;
+            Remove(DesktopUCP);
+            DesktopUCP = new UIDesktopUCP(Game);
+            DesktopUCP.OnModeClick += LiveButtonClicked;
+            DesktopUCP.SetMode(MainPanel.Mode);
+            PlaceDesktopUCP();
+            Add(DesktopUCP);
+            MainPanel.X = MainPanelX();
+            MainPanel.GameResized();
+        }
+
+        //the main panel starts right of the control panel
+        private float MainPanelX()
+        {
+            if (!Game.Desktop) return 64 + 15;
+            return (DesktopUCP.Classic) ? DesktopUCP.Size.X : 64 + 15 + 100;
+        }
+
+        private void PlaceDesktopUCP()
+        {
+            //the classic panel sits in the corner, like the original game's
+            DesktopUCP.Position = (DesktopUCP.Classic) ? new Vector2(0, Game.ScreenHeight - DesktopUCP.Size.Y) : new Vector2(15, Game.ScreenHeight - (278 + 15));
         }
     }
 }

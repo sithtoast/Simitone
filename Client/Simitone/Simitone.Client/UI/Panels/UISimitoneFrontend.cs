@@ -31,6 +31,8 @@ namespace Simitone.Client.UI.Panels
         public UIStencilButton ExtendPanelBtn;
         public UIModeSwitcher ModeSwitcher;
         public UIDesktopUCP DesktopUCP;
+        //classic UI: the live mode strip that takes the main panel's place in live mode
+        public UIClassicLivePanel ClassicLive;
         public UICheatTextbox CheatTextbox;
 
         public bool PanelActive;
@@ -79,6 +81,7 @@ namespace Simitone.Client.UI.Panels
                 PlaceDesktopUCP();
                 DesktopUCP.OnModeClick += LiveButtonClicked;
                 Add(DesktopUCP);
+                UpdateClassicLive();
             }
             else
             {
@@ -110,6 +113,11 @@ namespace Simitone.Client.UI.Panels
         {
             Clock?.SetHidden(obj != UIMainPanelMode.LIVE);
             DesktopUCP?.SetMode(obj);
+            if (ClassicLive != null)
+            {
+                ClassicLive.Visible = obj == UIMainPanelMode.LIVE;
+                if (ClassicLive.Visible && MainPanel.PanelActive) MainPanel.Close();
+            }
             var lotType = MainPanel.GetLotType(true);
             var hit = FSO.HIT.HITVM.Get();
             switch (obj)
@@ -171,6 +179,12 @@ namespace Simitone.Client.UI.Panels
 
         private bool LiveButtonClicked(UIMainPanelMode mode)
         {
+            if (ClassicLive != null && mode == UIMainPanelMode.LIVE)
+            {
+                //the classic strip is live mode's panel: leave the main panel closed (closing it if coming from buy or build)
+                if (MainPanel.Mode != UIMainPanelMode.LIVE) MainPanel.SetMode(mode);
+                return false;
+            }
             var deskAuto = Game.Desktop && (mode != UIMainPanelMode.LIVE || MainPanel.Mode != UIMainPanelMode.LIVE);
             if (MainPanel.PanelActive || deskAuto)
             {
@@ -298,6 +312,7 @@ namespace Simitone.Client.UI.Panels
             else
             {
                 PlaceDesktopUCP();
+                if (ClassicLive != null) PlaceClassicLive();
             }
             MainPanel.Y = Game.ScreenHeight - (128 + 15);
         }
@@ -314,8 +329,37 @@ namespace Simitone.Client.UI.Panels
             DesktopUCP.SetMode(MainPanel.Mode);
             PlaceDesktopUCP();
             Add(DesktopUCP);
+            UpdateClassicLive();
             MainPanel.X = MainPanelX();
             MainPanel.GameResized();
+        }
+
+        /// <summary>
+        /// Adds or removes the classic live strip to match the control panel.
+        /// </summary>
+        private void UpdateClassicLive()
+        {
+            var classic = DesktopUCP.Classic;
+            if (classic == (ClassicLive != null)) return;
+            if (classic)
+            {
+                ClassicLive = new UIClassicLivePanel(Game);
+                PlaceClassicLive();
+                ClassicLive.Visible = MainPanel.Mode == UIMainPanelMode.LIVE;
+                //under the control panel, whose mode swoosh reaches over the strip's edge
+                AddBefore(ClassicLive, DesktopUCP);
+            }
+            else
+            {
+                Remove(ClassicLive);
+                ClassicLive = null;
+            }
+        }
+
+        private void PlaceClassicLive()
+        {
+            ClassicLive.Position = new Vector2(DesktopUCP.Size.X, Game.ScreenHeight - UIClassicLivePanel.StripHeight);
+            ClassicLive.GameResized();
         }
 
         //the main panel starts right of the control panel

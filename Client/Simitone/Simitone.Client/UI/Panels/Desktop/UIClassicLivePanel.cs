@@ -12,7 +12,6 @@ using FSO.SimAntics.NetPlay.Model.Commands;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Simitone.Client.UI.Model;
-using Simitone.Client.UI.Panels.LiveSubpanels;
 using Simitone.Client.UI.Screens;
 using Simitone.Client.Utils;
 using System;
@@ -24,7 +23,7 @@ namespace Simitone.Client.UI.Panels.Desktop
     /// <summary>
     /// The classic live mode strip along the bottom of the screen, right of the classic control panel: the selected
     /// Sim's portrait and the rest of the family, the mood gauge with the panel buttons, and the selected panel.
-    /// Needs, Job, Personality and Relationships are drawn with the original art; Inventory is Simitone's, scaled to fit.
+    /// Each panel is drawn with the original art.
     /// </summary>
     public class UIClassicLivePanel : UIContainer
     {
@@ -107,12 +106,7 @@ namespace Simitone.Client.UI.Panels.Desktop
                 case 1: Panel = new UIClassicJobPanel(Game); break;
                 case 2: Panel = new UIClassicPersonalityPanel(Game); break;
                 case 3: Panel = new UIClassicRelationshipPanel(Game, UIScreen.Current.ScreenWidth - (int)X - PanelX); break;
-                default:
-                    //made for the 128 high main panel; shrink it into the strip
-                    var sub = new UIInventorySubpanel(Game);
-                    sub.ScaleX = sub.ScaleY = StripHeight / sub.Size.Y;
-                    Panel = sub;
-                    break;
+                default: Panel = new UIClassicInventoryPanel(Game, UIScreen.Current.ScreenWidth - (int)X - PanelX); break;
             }
             Panel.Position = new Vector2(PanelX, 0);
             Add(Panel);

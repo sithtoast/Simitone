@@ -362,4 +362,135 @@ namespace Simitone.Client.UI.Panels.Desktop
             if (Value >= 50) DrawLocalTexture(batch, Smiley, new Vector2(34, 34));
         }
     }
+
+    /// <summary>
+    /// The classic Inventory panel: the family's items in the same frames as the Relationships panel, with how many
+    /// there are. The buttons show gifts and other items, magic, or ingredients (Makin' Magic); the arrows page.
+    /// </summary>
+    public class UIClassicInventoryPanel : UIClassicSubpanel
+    {
+        private const int Rows = 2;
+        private const int CellSize = 47;
+        private const int GridX = 66;
+        //as Simitone's inventory: 2 is hidden, and 7 and 8 (magic and ingredients) only show when picked
+        private static readonly HashSet<int> HiddenTypes = new HashSet<int>() { 2, 6, 7, 8 };
+
+        private int Filter = -1; //-1 everything not hidden, otherwise that item type
+        private int Page;
+        private int Columns;
+        private List<UIButton> SortButtons = new List<UIButton>();
+        private List<int> SortFilters = new List<int>();
+        private UIButton PrevButton;
+        private UIButton NextButton;
+        private List<UIClassicInventoryItem> Cells = new List<UIClassicInventoryItem>();
+        private string LastKey;
+
+        public UIClassicInventoryPanel(TS1GameScreen game, int width) : base(game)
+        {
+            void sort(string name, int x, int y, int filter, string tooltip)
+            {
+                var b = new UIButton(Tex("Buttons/" + name)) { Position = new Vector2(x, y), Tooltip = tooltip };
+                b.OnButtonClick += (e) => { Filter = filter; Page = 0; LastKey = null; };
+                SortButtons.Add(b);
+                SortFilters.Add(filter);
+                Add(b);
+            }
+            sort("InventoryGiftSort.bmp", 10, 26, -1, "Gifts");
+            sort("InventoryMagicSort.bmp", 32, 26, 7, "Magic");
+            sort("InventoryOtherSort.bmp", 10, 50, 8, "Ingredients");
+
+            Columns = Math.Max(1, (width - GridX - 24) / CellSize);
+            Add(PrevButton = new UIButton(Tex("Buttons/ScrollLeft.BMP")) { Position = new Vector2(GridX - 11, 26), Tooltip = "Previous" });
+            Add(NextButton = new UIButton(Tex("Buttons/ScrollRight.BMP")) { Position = new Vector2(GridX + Columns * CellSize + 2, 26), Tooltip = "Next" });
+            PrevButton.OnButtonClick += (e) => { Page--; LastKey = null; };
+            NextButton.OnButtonClick += (e) => { Page++; LastKey = null; };
+        }
+
+        public override void Update(UpdateState state)
+        {
+            base.Update(state);
+            for (int i = 0; i < SortButtons.Count; i++) SortButtons[i].Selected = SortFilters[i] == Filter;
+
+            var sim = Game.SelectedAvatar;
+            if (sim == null) return;
+            var items = Content.Get().Neighborhood.GetInventoryByNID(sim.GetPersonData(VMPersonDataVariable.NeighborId))?
+                .Where(x => (Filter == -1) ? !HiddenTypes.Contains(x.Type) : x.Type == Filter)
+                .ToList() ?? new List<InventoryItem>();
+            var perPage = Columns * Rows;
+            var pages = Math.Max(1, (items.Count + perPage - 1) / perPage);
+            Page = Math.Max(0, Math.Min(pages - 1, Page));
+            PrevButton.Disabled = Page == 0;
+            NextButton.Disabled = Page >= pages - 1;
+
+            var shown = items.Skip(Page * perPage).Take(perPage).ToList();
+            var key = string.Join(",", shown.Select(x => x.GUID + "x" + x.Count));
+            if (key == LastKey) return;
+            LastKey = key;
+            foreach (var c in Cells) Remove(c);
+            Cells.Clear();
+            for (int i = 0; i < shown.Count; i++)
+            {
+                var cell = new UIClassicInventoryItem(shown[i])
+                {
+                    Position = new Vector2(GridX + (i / Rows) * CellSize, 4 + (i % Rows) * CellSize)
+                };
+                Cells.Add(cell);
+                Add(cell);
+            }
+        }
+    }
+
+    /// <summary>
+    /// One item in the classic Inventory panel: its catalog picture in a frame, and the count when there's more than one.
+    /// </summary>
+    public class UIClassicInventoryItem : UIContainer
+    {
+        private Texture2D Frame;
+        private Texture2D Icon;
+        private Texture2D Px;
+
+        public UIClassicInventoryItem(InventoryItem item)
+        {
+            Frame = ClassicUIGraphics.Get("cpanel/People/PeopleTemplate.bmp");
+            Px = TextureGenerator.GetPxWhite(GameFacade.GraphicsDevice);
+            var obj = Content.Get().WorldObjects.Get(item.GUID);
+            if (obj != null)
+            {
+                Icon = obj.Resource.Get<BMP>(obj.OBJ.CatalogStringsID)?.GetTexture(GameFacade.GraphicsDevice);
+                Tooltip = obj.Resource.Get<CTSS>(obj.OBJ.CatalogStringsID)?.GetString(0) ?? obj.OBJ.ChunkLabel;
+            }
+            if (item.Count > 1)
+            {
+                var style = TextStyle.DefaultLabel.Clone();
+                style.Size = 8;
+                style.Color = Color.White;
+                style.Shadow = true;
+                Add(new UILabel()
+                {
+                    Caption = item.Count.ToString(),
+                    CaptionStyle = style,
+                    Alignment = TextAlignment.Right | TextAlignment.Bottom,
+                    Position = new Vector2(3, 3),
+                    Size = new Vector2(38, 39)
+                });
+            }
+            ListenForMouse(new Rectangle(0, 0, 45, 45), (type, state) => { });
+        }
+
+        public override void Draw(UISpriteBatch batch)
+        {
+            if (!Visible) return;
+            DrawLocalTexture(batch, Frame, new Rectangle(0, 0, 45, 45), Vector2.Zero);
+            DrawLocalTexture(batch, Px, null, new Vector2(3), new Vector2(39), new Color(0, 0, 64));
+            if (Icon != null)
+            {
+                //catalog pictures are two frames side by side; the first is the normal one
+                var src = new Rectangle(0, 0, Icon.Width / 2, Icon.Height);
+                var scale = 39f / Math.Max(src.Width, src.Height);
+                var pos = new Vector2(3 + (39 - src.Width * scale) / 2, 3 + (39 - src.Height * scale) / 2);
+                DrawLocalTexture(batch, Icon, src, pos, new Vector2(scale));
+            }
+            base.Draw(batch);
+        }
+    }
 }

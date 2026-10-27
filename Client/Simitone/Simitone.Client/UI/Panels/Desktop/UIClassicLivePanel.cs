@@ -44,6 +44,7 @@ namespace Simitone.Client.UI.Panels.Desktop
         private UIButton[] PanelButtons = new UIButton[5];
         private int PanelID = -1;
         private UIElement Panel;
+        private int PanelWidth; //the space the open panel was made for
 
         private List<UIClassicPortrait> Portraits = new List<UIClassicPortrait>();
         private string LastFamily = "";
@@ -98,23 +99,32 @@ namespace Simitone.Client.UI.Panels.Desktop
             HITVM.Get().PlaySoundEvent(UISounds.Click);
             PanelID = id;
             for (int i = 0; i < PanelButtons.Length; i++) PanelButtons[i].Selected = i == id;
-            if (Panel != null) Remove(Panel);
+            CreatePanel();
+        }
 
-            switch (id)
+        private void CreatePanel()
+        {
+            if (Panel != null) Remove(Panel);
+            PanelWidth = AvailableWidth();
+            switch (PanelID)
             {
                 case 0: Panel = new UIClassicNeedsPanel(Game); break;
                 case 1: Panel = new UIClassicJobPanel(Game); break;
                 case 2: Panel = new UIClassicPersonalityPanel(Game); break;
-                case 3: Panel = new UIClassicRelationshipPanel(Game, UIScreen.Current.ScreenWidth - (int)X - PanelX); break;
-                default: Panel = new UIClassicInventoryPanel(Game, UIScreen.Current.ScreenWidth - (int)X - PanelX); break;
+                case 3: Panel = new UIClassicRelationshipPanel(Game, PanelWidth); break;
+                default: Panel = new UIClassicInventoryPanel(Game, PanelWidth); break;
             }
             Panel.Position = new Vector2(PanelX, 0);
             Add(Panel);
         }
 
+        private int AvailableWidth() => UIScreen.Current.ScreenWidth - (int)X - PanelX;
+
         public override void Update(UpdateState state)
         {
             base.Update(state);
+            //the strip is placed and resized after it's made; the paged panels fit as many columns as there's room for
+            if (PanelWidth != AvailableWidth()) CreatePanel();
             var family = Game.vm.TS1State.CurrentFamily;
             var members = (family == null) ? new List<VMAvatar>() : Game.vm.Context.ObjectQueries.Avatars
                 .Where(x => family.RuntimeSubset.Contains(x.Object.OBJ.GUID)).OfType<VMAvatar>().ToList();

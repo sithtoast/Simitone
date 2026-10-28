@@ -33,6 +33,8 @@ using FSO.Client.Debug;
 using Simitone.Client.UI.Screens;
 using FSO.LotView.RC;
 using Simitone.Client.UI.Panels.LotControls;
+using Simitone.Client.UI.Panels.Desktop;
+using Simitone.Client.UI.Model;
 using FSO.Client.UI.Panels.LotControls;
 using FSO.UI.Panels.LotControls;
 using Simitone.Client.UI.Controls;
@@ -105,7 +107,7 @@ namespace Simitone.Client.UI.Panels
         // NOTE: Blocking dialog system assumes that nothing goes wrong with data transmission (which it shouldn't, because we're using TCP)
         // and that the code actually blocks further dialogs from appearing while waiting for a response.
         // If we are to implement controlling multiple sims, this must be changed.
-        private UIMobileDialog BlockingDialog;
+        private UIElement BlockingDialog; //a UIMobileDialog, or a UIClassicAlert in classic mode
         private UINeighborhoodSelectionPanel TS1NeighSelector;
         private ulong LastDialogID;
 
@@ -300,17 +302,8 @@ namespace Simitone.Client.UI.Panels
                     return;
             }
 
-            var alert = new UIMobileAlert(options);
-
-            UIScreen.GlobalShowDialog(alert, true);
-
-            if (info.Block)
-            {
-                BlockingDialog = alert;
-                LastDialogID = info.DialogID;
-            }
-
             var entity = info.Icon;
+            Texture2D thumb = null;
             if (entity is VMGameObject)
             {
                 var objects = entity.MultitileGroup.Objects;
@@ -319,8 +312,29 @@ namespace Simitone.Client.UI.Panels
                 {
                     objComps[i] = (ObjectComponent)objects[i].WorldUI;
                 }
-                var thumb = World.GetObjectThumb(objComps, entity.MultitileGroup.GetBasePositions(), GameFacade.GraphicsDevice);
-                alert.SetIcon(thumb, 256, 256);
+                thumb = World.GetObjectThumb(objComps, entity.MultitileGroup.GetBasePositions(), GameFacade.GraphicsDevice);
+            }
+
+            UIElement dialog;
+            if (((TS1GameScreen)Parent).Frontend?.DesktopUCP?.Classic == true)
+            {
+                //the game's own dialog shows a Sim's face too
+                if (entity is VMAvatar) thumb = UIIconCache.GetObject(entity);
+                dialog = new UIClassicAlert(options, thumb, entity is VMAvatar);
+            }
+            else
+            {
+                var alert = new UIMobileAlert(options);
+                if (thumb != null) alert.SetIcon(thumb, 256, 256);
+                dialog = alert;
+            }
+
+            UIScreen.GlobalShowDialog(dialog, true);
+
+            if (info.Block)
+            {
+                BlockingDialog = dialog;
+                LastDialogID = info.DialogID;
             }
         }
 
@@ -343,14 +357,23 @@ namespace Simitone.Client.UI.Panels
 
         private void DialogResponse(byte code)
         {
-            if (BlockingDialog == null || !(BlockingDialog is UIMobileAlert)) return;
-            BlockingDialog.Close();
-            var ma = (UIMobileAlert)BlockingDialog;
+            string text;
+            if (BlockingDialog is UIMobileAlert ma)
+            {
+                ma.Close();
+                text = ma.ResponseText;
+            }
+            else if (BlockingDialog is UIClassicAlert ca)
+            {
+                ca.Close();
+                text = ca.ResponseText;
+            }
+            else return;
             LastDialogID = 0;
             vm.SendCommand(new VMNetDialogResponseCmd
             {
                 ResponseCode = code,
-                ResponseText = (ma.ResponseText == null) ? "" : ma.ResponseText
+                ResponseText = text ?? ""
             });
             BlockingDialog = null;
         }

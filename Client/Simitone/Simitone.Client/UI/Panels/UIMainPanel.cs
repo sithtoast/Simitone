@@ -15,6 +15,7 @@ using System.Threading.Tasks;
 using FSO.Common.Rendering.Framework.Model;
 using Simitone.Client.UI.Panels.LiveSubpanels;
 using Simitone.Client.UI.Screens;
+using Simitone.Client.Utils;
 using FSO.Client.UI.Controls;
 
 namespace Simitone.Client.UI.Panels
@@ -272,13 +273,27 @@ namespace Simitone.Client.UI.Panels
                     panel = new UIBuyBrowsePanel(Game, (sbyte)obj, UICatalogMode.Build);
                     break;
                 case UIMainPanelMode.OPTIONS:
+                    //the classic control panel replaces the desktop one, and needs the original art in the TS1 install
+                    var classicToggle = Game.Desktop && ClassicUIGraphics.Available;
+                    //six buttons only fit a 1024 wide screen closer together
+                    var spacing = classicToggle ? 90f : OptionsSpacing;
                     panel = new UIButtonSubpanel(Game, new UICatFunc[] {
                         new UICatFunc(GameFacade.Strings.GetString("145", "3"), "opt_save.png", () => { Game.Save(); }),
                         new UICatFunc(GameFacade.Strings.GetString("145", "1"), "opt_neigh.png", () => { Game.ReturnToNeighbourhood(); }),
                         new UICatFunc(GameFacade.Strings.GetString("145", "5"), "opt_quit.png", () => { Game.CloseAttempt(); }),
                         new UICatFunc("Settings", "opt_settings.png", () => { UIScreen.GlobalShowDialog(new UIOptionsAlert(), true); }),
-                    }, OptionsSpacing);
-                    AddFreeWillToggle(panel);
+                    }, spacing);
+                    AddOptionToggle(panel, 4, spacing, "Free Will", "opt_freewill.png", () => VM.FreeWillEnabled, (on) =>
+                    {
+                        VM.FreeWillEnabled = on;
+                        GlobalSettings.Default.TS1FreeWill = on;
+                    });
+                    if (classicToggle)
+                        AddOptionToggle(panel, 5, spacing, "Classic UI", "opt_classicui.png", () => GlobalSettings.Default.TS1ClassicUI, (on) =>
+                        {
+                            GlobalSettings.Default.TS1ClassicUI = on;
+                            Game.Frontend.RebuildDesktopUCP();
+                        });
                     break;
             }
             SetSubpanel(panel);
@@ -541,12 +556,13 @@ namespace Simitone.Client.UI.Panels
             };
         }
 
-        private void AddFreeWillToggle(UISubpanel parent)
+        /// <summary>
+        /// An on/off button after the options panel's buttons, labelled with its state, saved to the settings when clicked.
+        /// </summary>
+        private void AddOptionToggle(UISubpanel parent, int index, float spacing, string name, string icon, Func<bool> get, Action<bool> set)
         {
-            // Index 4 (5th button, after Graphics) to match spacing of existing buttons
-            // Existing buttons use: 50 + i * spacing for button X, 50 + i * spacing - 27 for label X
-            int index = 4;
-            float buttonX = 50 + index * OptionsSpacing;
+            // Placed like UIButtonSubpanel's buttons: 50 + i * spacing for button X, 27 less for label X
+            float buttonX = 50 + index * spacing;
             float labelX = buttonX - 27;
 
             var label = new UILabel();
@@ -559,16 +575,15 @@ namespace Simitone.Client.UI.Panels
             label.CaptionStyle.Color = UIStyle.Current.Text;
             
             Action updateLabel = () => {
-                bool enabled = VM.FreeWillEnabled;
-                label.Caption = "Free Will:\n" + (enabled ? "ON" : "OFF");
+                bool enabled = get();
+                label.Caption = name + ":\n" + (enabled ? "ON" : "OFF");
                 label.CaptionStyle.Color = enabled ? UIStyle.Current.Text : UIStyle.Current.NegMoney;
             };
             
-            var toggleButton = new UICatButton(Content.Get().CustomUI.Get("opt_freewill.png").Get(GameFacade.GraphicsDevice));
+            var toggleButton = new UICatButton(Content.Get().CustomUI.Get(icon).Get(GameFacade.GraphicsDevice));
             toggleButton.Position = new Vector2(buttonX - 50, 16);
             toggleButton.OnButtonClick += (btn) => {
-                VM.FreeWillEnabled = !VM.FreeWillEnabled;
-                GlobalSettings.Default.TS1FreeWill = VM.FreeWillEnabled;
+                set(!get());
                 GlobalSettings.Default.Save();
                 updateLabel();
             };

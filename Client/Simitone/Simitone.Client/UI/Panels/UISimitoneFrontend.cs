@@ -31,6 +31,9 @@ namespace Simitone.Client.UI.Panels
         public UIStencilButton ExtendPanelBtn;
         public UIModeSwitcher ModeSwitcher;
         public UIDesktopUCP DesktopUCP;
+        //classic UI: the live mode strip that takes the main panel's place in live mode
+        public UIClassicLivePanel ClassicLive;
+        public UIClassicStrip ClassicMode; //the classic Buy, Build or Options panel, in place of the main panel
         public UICheatTextbox CheatTextbox;
 
         public bool PanelActive;
@@ -76,9 +79,10 @@ namespace Simitone.Client.UI.Panels
             if (Game.Desktop)
             {
                 DesktopUCP = new UIDesktopUCP(screen);
-                DesktopUCP.Position = new Vector2(15, screen.ScreenHeight - (278 + 15));
+                PlaceDesktopUCP();
                 DesktopUCP.OnModeClick += LiveButtonClicked;
                 Add(DesktopUCP);
+                UpdateClassicLive();
             }
             else
             {
@@ -90,8 +94,7 @@ namespace Simitone.Client.UI.Panels
                 ExtendPanelBtn.Position = new Vector2(mode.X + 54, mode.Y - 50);
             }
 
-            MainPanel.X = 64 + 15;
-            if (Game.Desktop) MainPanel.X += 100;
+            MainPanel.X = MainPanelX();
             MainPanel.GameResized();
             MainPanel.Y = screen.ScreenHeight - (128 + 15);
             MainPanel.Visible = false;
@@ -111,6 +114,18 @@ namespace Simitone.Client.UI.Panels
         {
             Clock?.SetHidden(obj != UIMainPanelMode.LIVE);
             DesktopUCP?.SetMode(obj);
+            if (ClassicLive != null)
+            {
+                ClassicLive.Visible = obj == UIMainPanelMode.LIVE;
+                if (ClassicLive.Visible || HasClassicMode(obj))
+                {
+                    if (MainPanel.PanelActive) MainPanel.Close();
+                    //the mode's first category opens a subpanel even with the main panel closed (and buy mode's search
+                    //box). Removing it lets go of anything held, so do it before the classic panel picks anything up
+                    MainPanel.SetSubpanel(null);
+                }
+                UpdateClassicMode(obj);
+            }
             var lotType = MainPanel.GetLotType(true);
             var hit = FSO.HIT.HITVM.Get();
             switch (obj)
@@ -172,6 +187,12 @@ namespace Simitone.Client.UI.Panels
 
         private bool LiveButtonClicked(UIMainPanelMode mode)
         {
+            if (ClassicLive != null && (mode == UIMainPanelMode.LIVE || HasClassicMode(mode)))
+            {
+                //the classic strips are these modes' panels: leave the main panel closed (closing it if it was open)
+                if (MainPanel.Mode != mode) MainPanel.SetMode(mode);
+                return false;
+            }
             var deskAuto = Game.Desktop && (mode != UIMainPanelMode.LIVE || MainPanel.Mode != UIMainPanelMode.LIVE);
             if (MainPanel.PanelActive || deskAuto)
             {
@@ -298,9 +319,114 @@ namespace Simitone.Client.UI.Panels
             }
             else
             {
-                DesktopUCP.Position = new Vector2(15, Game.ScreenHeight - (278 + 15));
+                PlaceDesktopUCP();
+                if (ClassicLive != null) PlaceClassicLive();
+                if (ClassicMode != null) PlaceClassicMode();
             }
             MainPanel.Y = Game.ScreenHeight - (128 + 15);
+        }
+
+        /// <summary>
+        /// Replaces the desktop control panel, after the classic UI setting changes.
+        /// </summary>
+        public void RebuildDesktopUCP()
+        {
+            if (DesktopUCP == null) return;
+            Remove(DesktopUCP);
+            DesktopUCP = new UIDesktopUCP(Game);
+            DesktopUCP.OnModeClick += LiveButtonClicked;
+            DesktopUCP.SetMode(MainPanel.Mode);
+            PlaceDesktopUCP();
+            Add(DesktopUCP);
+            UpdateClassicLive();
+            MainPanel.X = MainPanelX();
+            MainPanel.GameResized();
+        }
+
+        /// <summary>
+        /// Adds or removes the classic live strip to match the control panel.
+        /// </summary>
+        private void UpdateClassicLive()
+        {
+            var classic = DesktopUCP.Classic;
+            if (classic == (ClassicLive != null)) return;
+            if (classic)
+            {
+                ClassicLive = new UIClassicLivePanel(Game);
+                PlaceClassicLive();
+                ClassicLive.Visible = MainPanel.Mode == UIMainPanelMode.LIVE;
+                //under the control panel, whose mode swoosh reaches over the strip's edge
+                AddBefore(ClassicLive, DesktopUCP);
+            }
+            else
+            {
+                Remove(ClassicLive);
+                ClassicLive = null;
+                UpdateClassicMode(UIMainPanelMode.LIVE);
+                if (MainPanel.Mode != UIMainPanelMode.LIVE)
+                {
+                    //back to the main panel for this mode
+                    MainPanel.Open();
+                    MainPanel.Switcher_OnCategorySelect(MainPanel.Switcher.ActiveCategory);
+                }
+            }
+            if (classic) UpdateClassicMode(MainPanel.Mode);
+        }
+
+        /// <summary>
+        /// If classic mode has its own panel for this mode (besides live mode's strip).
+        /// </summary>
+        private bool HasClassicMode(UIMainPanelMode mode)
+        {
+            return mode == UIMainPanelMode.OPTIONS || mode == UIMainPanelMode.BUY || mode == UIMainPanelMode.BUILD;
+        }
+
+        /// <summary>
+        /// Shows the classic panel for this mode, replacing the last one.
+        /// </summary>
+        private void UpdateClassicMode(UIMainPanelMode mode)
+        {
+            if (ClassicMode != null)
+            {
+                ClassicMode.Kill();
+                Remove(ClassicMode);
+                ClassicMode = null;
+            }
+            if (ClassicLive == null || !HasClassicMode(mode)) return;
+            switch (mode)
+            {
+                case UIMainPanelMode.OPTIONS: ClassicMode = new UIClassicOptionsPanel(Game); break;
+                case UIMainPanelMode.BUY: ClassicMode = new UIClassicBuyPanel(Game, MainPanel.GetLotType(false)); break;
+                case UIMainPanelMode.BUILD: ClassicMode = new UIClassicBuildPanel(Game); break;
+            }
+            PlaceClassicMode();
+            AddBefore(ClassicMode, DesktopUCP);
+            if (MainPanel.PanelActive) MainPanel.Close();
+        }
+
+        private void PlaceClassicMode()
+        {
+            ClassicMode.Position = new Vector2(DesktopUCP.Size.X, Game.ScreenHeight - UIClassicStrip.StripHeight);
+            ClassicMode.GameResized();
+        }
+
+        private void PlaceClassicLive()
+        {
+            ClassicLive.Position = new Vector2(DesktopUCP.Size.X, Game.ScreenHeight - UIClassicLivePanel.StripHeight);
+            ClassicLive.GameResized();
+        }
+
+        //the main panel starts right of the control panel
+        private float MainPanelX()
+        {
+            if (!Game.Desktop) return 64 + 15;
+            return (DesktopUCP.Classic) ? DesktopUCP.Size.X : 64 + 15 + 100;
+        }
+
+        private void PlaceDesktopUCP()
+        {
+            //the classic panel sits in the corner, like the original game's
+            DesktopUCP.Position = (DesktopUCP.Classic) ? new Vector2(0, Game.ScreenHeight - DesktopUCP.Size.Y) : new Vector2(15, Game.ScreenHeight - (278 + 15));
         }
     }
 }

@@ -256,23 +256,10 @@ if [[ "$(uname)" == "Linux" ]]; then
     fi
 fi
 
-# Check dependencies on macOS
+# macOS needs no extra packages: universal SDL2 and OpenAL dylibs come from the
+# MonoGame.Library.SDL / MonoGame.Library.OpenAL NuGet packages.
 if [[ "$(uname)" == "Darwin" ]]; then
-    # Check for SDL2 (required for MonoGame)
-    if ! brew list sdl2 &> /dev/null; then
-        echo ""
-        echo "SDL2 not found. SDL2 is required for MonoGame."
-        read -p "Would you like to install SDL2 now? (Y/n) " -n 1 -r
-        echo
-        if [[ ! $REPLY =~ ^[Nn]$ ]]; then
-            brew install sdl2
-        fi
-    else
-        echo "✓ SDL2 found"
-    fi
-    
-    # OpenAL is included with macOS
-    echo "✓ OpenAL (built-in on macOS)"
+    echo "✓ SDL2 and OpenAL (bundled via NuGet)"
 fi
 
 echo ""
@@ -307,19 +294,9 @@ if [[ "$PUBLISH" == "--publish" ]]; then
     echo ""
     echo "Step 3: Publishing self-contained build with launcher..."
     
-    # Check for C compiler (required for native launcher)
-    if [[ "$(uname)" == "Darwin" ]]; then
-        if ! command -v clang &> /dev/null; then
-            echo ""
-            echo "ERROR: clang not found. Required for building the native launcher."
-            echo ""
-            echo "Install Xcode Command Line Tools with:"
-            echo "  xcode-select --install"
-            echo ""
-            exit 1
-        fi
-        CC="clang"
-    else
+    # Check for C compiler (required for the native launcher, which only Linux uses;
+    # macOS ships Simitone.app instead)
+    if [[ "$(uname)" != "Darwin" ]]; then
         if ! command -v gcc &> /dev/null; then
             echo ""
             echo "ERROR: gcc not found. Required for building the native launcher."
@@ -332,12 +309,12 @@ if [[ "$PUBLISH" == "--publish" ]]; then
             exit 1
         fi
         CC="gcc"
+        echo "✓ C compiler found: $CC"
     fi
-    echo "✓ C compiler found: $CC"
     
-    # Detect architecture
-    ARCH="$(uname -m)"
-    if [[ "$ARCH" == "x86_64" ]]; then
+    # Detect architecture (SIMITONE_ARCH=x64|arm64 overrides, e.g. to build Intel on Apple Silicon)
+    ARCH="${SIMITONE_ARCH:-$(uname -m)}"
+    if [[ "$ARCH" == "x86_64" || "$ARCH" == "x64" ]]; then
         RID_ARCH="x64"
     elif [[ "$ARCH" == "aarch64" || "$ARCH" == "arm64" ]]; then
         RID_ARCH="arm64"

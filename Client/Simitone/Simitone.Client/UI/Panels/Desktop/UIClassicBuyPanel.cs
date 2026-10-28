@@ -15,7 +15,8 @@ namespace Simitone.Client.UI.Panels.Desktop
 {
     /// <summary>
     /// The classic Buy mode panel. It starts with the catalog's two sorts: by function (top row) and by room (bottom).
-    /// Picking one shows its subsorts with a button to go back, and the items beside them.
+    /// Picking one shows its subsorts with a button to go back, and the items beside them. Community lots sort by
+    /// the lot's own areas instead of rooms, and only offer the objects made for that kind of lot.
     /// </summary>
     public class UIClassicBuyPanel : UIClassicStrip
     {
@@ -37,6 +38,17 @@ namespace Simitone.Client.UI.Panels.Desktop
         {
             ("Living", 3), ("Dining", 5), ("Bedroom", 1), ("Study", 7),
             ("Kitchen", 0), ("Bathroom", 2), ("Outside", 4), ("Misc", 6)
+        };
+        //by area, on community lots: the sort and back button art, the object's lot sort flag and the name (string
+        //table 150), and the art for the area's subsorts. The game shares some art between lot types.
+        private static readonly Dictionary<UICatalogMode, ((string Icon, string Back, int Bit, int String)[] Areas, string Subsorts)> LotAreas =
+            new Dictionary<UICatalogMode, ((string, string, int, int)[], string)>()
+        {
+            { UICatalogMode.Downtown, (new[] { ("DDining", "DDining", 0, 16), ("DShops", "DShops", 1, 17), ("DOutdoor", "DOutdoor", 2, 18), ("DStreet", "DStreet", 3, 19), ("DMisc", "DMisc", 7, 23) }, "Downtown") },
+            { UICatalogMode.Vacation, (new[] { ("VOne", "VOne", 0, 24), ("VTwo", "VTwo", 1, 25), ("VThree", "VThree", 2, 26), ("VFour", "VFour", 3, 27), ("VMisc", "VMisc", 7, 31) }, "Vacation") },
+            { UICatalogMode.Community, (new[] { ("COne", "COne", 0, 32), ("CTwo", "CTwo", 1, 33), ("CThree", "CThree", 2, 34), ("CFour", "CFour", 3, 35), ("CMisc", "CMisc", 7, 39) }, "Community") },
+            { UICatalogMode.Studiotown, (new[] { ("DDining", "DDining", 0, 40), ("DShops", "DShops", 1, 41), ("STStudio", "SStudio", 2, 42), ("STSpa", "SSpa", 3, 43), ("DMisc", "DMisc", 7, 47) }, "Downtown") },
+            { UICatalogMode.Magictown, (new[] { ("DDining", "DDining", 0, 16), ("DShops", "DShops", 1, 17), ("MTmagic", "MMagic", 2, 44), ("MOutdoor", "DOutdoor", 3, 18), ("DMisc", "DMisc", 7, 23) }, "Downtown") },
         };
 
         private UIBuyBrowsePanel Engine;
@@ -126,13 +138,27 @@ namespace Simitone.Client.UI.Panels.Desktop
                 b.OnButtonClick += (e) => ShowFunction(f.Name, f.Category);
                 left.Add(b);
             }
-            for (int i = 0; i < Rooms.Length; i++)
+            if (LotAreas.TryGetValue(Engine.Mode, out var lot))
             {
-                var r = Rooms[i];
-                var b = new UIButton(Tex("Catalog/BuyR" + r.Name + ".bmp")) { Tooltip = Str(150, i) };
-                b.Position = new Vector2(12 + i * 40 + (36 - b.Size.X) / 2, 52 + (44 - b.Size.Y) / 2);
-                b.OnButtonClick += (e) => ShowRoom(r.Name, r.Bit);
-                left.Add(b);
+                for (int i = 0; i < lot.Areas.Length; i++)
+                {
+                    var a = lot.Areas[i];
+                    var b = new UIButton(Tex("Catalog/Buy" + a.Icon + ".bmp")) { Tooltip = Str(150, a.String) };
+                    b.Position = new Vector2(12 + i * 40 + (36 - b.Size.X) / 2, 52 + (44 - b.Size.Y) / 2);
+                    b.OnButtonClick += (e) => ShowArea(a.Back, x => (Engine.GetSubsort(x) & (1 << a.Bit)) != 0, lot.Subsorts);
+                    left.Add(b);
+                }
+            }
+            else
+            {
+                for (int i = 0; i < Rooms.Length; i++)
+                {
+                    var r = Rooms[i];
+                    var b = new UIButton(Tex("Catalog/BuyR" + r.Name + ".bmp")) { Tooltip = Str(150, i) };
+                    b.Position = new Vector2(12 + i * 40 + (36 - b.Size.X) / 2, 52 + (44 - b.Size.Y) / 2);
+                    b.OnButtonClick += (e) => ShowArea("R" + r.Name, x => (x.RoomSort & (1 << r.Bit)) != 0, null);
+                    left.Add(b);
+                }
             }
             SetLeft(left);
             Catalog.SetItems(new List<UICatalogElement>());
@@ -172,14 +198,14 @@ namespace Simitone.Client.UI.Panels.Desktop
 
         private void ShowFunction(string name, sbyte category)
         {
-            var items = Elements(Content.Get().WorldCatalog.GetItemsByCategory(category));
+            var items = Elements(Content.Get().WorldCatalog.GetItemsByCategory(category).Where(ForSale));
             List<UICatalogElement> where(int bit)
             {
                 //as Simitone's buy panel: "other" also takes subsort 16, and "all" anything with a subsort
-                if (bit == 8) return items.Where(x => Engine.GetSubsort(x.Item) > 0).ToList();
+                if (bit == 8) return items.Where(x => FunctionSort(x.Item) > 0).ToList();
                 var mask = 1 << bit;
                 if (bit == 7) mask |= 16;
-                return items.Where(x => (Engine.GetSubsort(x.Item) & mask) > 0).ToList();
+                return items.Where(x => (FunctionSort(x.Item) & mask) > 0).ToList();
             }
             var folder = "Catalog/SubSortIcons/" + SubsortFolders[category] + "/BuySubSort";
             var table = 200 + UIBuyBrowsePanel.RemapString[category];
@@ -196,20 +222,36 @@ namespace Simitone.Client.UI.Panels.Desktop
             ShowSubsorts("F" + name, subs);
         }
 
-        private void ShowRoom(string name, int bit)
+        /// <summary>
+        /// Everything for a room (or a community lot's area), then by function.
+        /// </summary>
+        /// <param name="back">The back button's art.</param>
+        /// <param name="subsorts">Whose subsort art to use (null for the rooms').</param>
+        private void ShowArea(string back, Func<ObjectCatalogItem, bool> inArea, string subsorts)
         {
-            //everything for the room, then by function
             var items = Elements(Enumerable.Range(0, 8).SelectMany(c => Content.Get().WorldCatalog.GetItemsByCategory((sbyte)c))
-                .Where(x => (x.RoomSort & (1 << bit)) != 0));
+                .Where(x => ForSale(x) && inArea(x)));
+            var art = (subsorts == null) ? "RoomSubsort/BuySubSortRoom" : subsorts + "Subsort/BuySubSort" + subsorts;
             var subs = new List<(string, string, List<UICatalogElement>)>();
             for (int i = 0; i < Functions.Length; i++)
             {
                 var f = Functions[i];
-                subs.Add(("Catalog/SubSortIcons/RoomSubsort/BuySubSortRoom" + f.Name + ".bmp", Str(150, 8 + i), items.Where(x => x.Item.Category == f.Category).ToList()));
+                subs.Add(("Catalog/SubSortIcons/" + art + f.Name + ".bmp", Str(150, 8 + i), items.Where(x => x.Item.Category == f.Category).ToList()));
             }
             subs.Add(("Catalog/SubSortIcons/BuySubSortAll.bmp", Str(210, 2), items));
-            ShowSubsorts("R" + name, subs);
+            ShowSubsorts(back, subs);
         }
+
+        /// <summary>
+        /// Community lots only sell the objects made for that kind of lot (the ones it sorts into an area).
+        /// </summary>
+        private bool ForSale(ObjectCatalogItem item) => !LotAreas.ContainsKey(Engine.Mode) || Engine.GetSubsort(item) != 0;
+
+        /// <summary>
+        /// The object's subsort within its function. On community lots Simitone's catalog sorts by area instead, so
+        /// this reads the function subsort itself.
+        /// </summary>
+        private byte FunctionSort(ObjectCatalogItem item) => LotAreas.ContainsKey(Engine.Mode) ? item.Subsort : Engine.GetSubsort(item);
 
         private static List<UICatalogElement> Elements(IEnumerable<ObjectCatalogItem> items)
         {

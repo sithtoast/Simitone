@@ -1,6 +1,7 @@
 using FSO.Client;
 using FSO.Client.UI.Controls;
 using FSO.Client.UI.Framework;
+using FSO.Common;
 using FSO.HIT;
 using FSO.HIT.Model;
 using FSO.SimAntics;
@@ -40,8 +41,7 @@ namespace Simitone.Client.UI.Panels.Desktop
             btn("OptSave.BMP", 29, 6, str(3), () => Game.Save());
             btn("OptNbhd.bmp", 88, 6, str(1), () => Game.ReturnToNeighbourhood());
             btn("OptExit.bmp", 159, 6, str(5), () => Game.CloseAttempt());
-            //Simitone's settings dialog opens on its graphics tab
-            GraphicsButton = btn("optgraphics.bmp", 29, 58, str(7), () => UIScreen.GlobalShowDialog(new UIOptionsAlert(), true));
+            GraphicsButton = btn("optgraphics.bmp", 29, 58, str(7), () => ShowPage(2));
             SoundButton = btn("optsound.bmp", 89, 58, str(9), () => ShowPage(1));
             PlayButton = btn("optplay.bmp", 151, 58, str(11), () => ShowPage(0));
 
@@ -58,9 +58,10 @@ namespace Simitone.Client.UI.Panels.Desktop
         {
             PlayButton.Selected = page == 0;
             SoundButton.Selected = page == 1;
+            GraphicsButton.Selected = page == 2;
             if (Page != null) Remove(Page);
             Popup?.Hide();
-            Page = (page == 0) ? PlayPage() : SoundPage();
+            Page = (page == 0) ? PlayPage() : (page == 1) ? SoundPage() : GraphicsPage();
             Add(Page);
             if (Popup != null) Add(Popup); //keep it on top
         }
@@ -108,6 +109,60 @@ namespace Simitone.Client.UI.Panels.Desktop
                     Game.Frontend.RebuildDesktopUCP();
                 });
             return page;
+        }
+
+        /// <summary>
+        /// The game's graphics options that Simitone has a setting for. Shadows need lighting, as Simitone's shadows
+        /// are a lighting mode. Interface Effects is the smooth zoom, and the game's two detail settings are left out.
+        /// </summary>
+        private UIContainer GraphicsPage()
+        {
+            string str(int i) => GameFacade.Strings.GetString("145", i.ToString());
+            var settings = GlobalSettings.Default;
+            var page = new UIContainer();
+            UIClassicCheckbox check(int name, string picture, int y, bool value, Action<bool> set)
+            {
+                var box = new UIClassicCheckbox(str(name), Style(10), 190) { Position = new Vector2(SettingsX, y), Checked = value };
+                box.OnToggle += (on) =>
+                {
+                    set(on);
+                    ApplyGraphics();
+                };
+                box.OnHover += Explains(picture, str(name + 1), str(name + 2));
+                page.Add(box);
+                return box;
+            }
+            UIClassicCheckbox shadows = null;
+            //anti-aliasing is MSAA where the graphics card has it, supersampling otherwise
+            check(14, "PopupOptAntiAlias.bmp", 9, settings.AntiAlias > 0, (on) => settings.AntiAlias = on ? (FSOEnvironment.MSAASupport ? 1 : 2) : 0);
+            shadows = check(17, "PopupOptShadows.bmp", 29, settings.LightingMode >= 2, (on) => settings.LightingMode = on ? 2 : 1);
+            check(20, "PopupOptLighting.bmp", 49, settings.LightingMode > 0, (on) =>
+            {
+                settings.LightingMode = on ? 1 : 0;
+                shadows.Checked = false;
+                shadows.Disabled = !on;
+            });
+            shadows.Disabled = settings.LightingMode == 0;
+            check(23, "PopupOptTransUI.bmp", 69, settings.SmoothZoom, (on) => settings.SmoothZoom = on);
+            //the rest (3D, display, window size, refresh rate) are in Simitone's settings dialog
+            var more = new UIButton(Tex("Buttons/ButtonTileDialog.BMP")) { Caption = "More Settings", CaptionStyle = Style(10), Width = 120, Position = new Vector2(SettingsX + 215, 32) };
+            more.OnButtonClick += (b) => UIScreen.GlobalShowDialog(new UIOptionsAlert(), true);
+            page.Add(more);
+            return page;
+        }
+
+        /// <summary>
+        /// Saves the graphics settings and applies them to the lot.
+        /// </summary>
+        private void ApplyGraphics()
+        {
+            var settings = GlobalSettings.Default;
+            var config = FSO.LotView.WorldConfig.Current;
+            config.LightingMode = settings.LightingMode;
+            config.AA = settings.AntiAlias;
+            config.SmoothZoom = settings.SmoothZoom;
+            Game.vm?.Context.World.ChangedWorldConfig(GameFacade.GraphicsDevice);
+            settings.Save();
         }
 
         private UIContainer SoundPage()

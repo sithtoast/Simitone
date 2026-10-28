@@ -5,6 +5,7 @@ using FSO.Common;
 using FSO.HIT;
 using FSO.HIT.Model;
 using FSO.SimAntics;
+using FSO.SimAntics.Primitives;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Simitone.Client.UI.Model;
@@ -82,25 +83,34 @@ namespace Simitone.Client.UI.Panels.Desktop
         {
             string str(int i) => GameFacade.Strings.GetString("145", i.ToString());
             var page = new UIContainer();
-            var y = 9;
+            var settings = GlobalSettings.Default;
+            var count = 0;
             void check(string name, string picture, string title, string text, bool value, Action<bool> set)
             {
-                var box = new UIClassicCheckbox(name, Style(10), 190) { Position = new Vector2(SettingsX, y), Checked = value };
+                //four to a column, at the game's spacing
+                var pos = new Vector2(SettingsX + (count / 4) * 200, 9 + (count % 4) * 20);
+                var box = new UIClassicCheckbox(name, Style(10), 190) { Position = pos, Checked = value };
                 box.OnToggle += (on) =>
                 {
                     set(on);
-                    GlobalSettings.Default.Save();
+                    settings.Save();
                 };
                 box.OnHover += Explains(picture, title, text);
                 page.Add(box);
-                y += 20; //the game's spacing
+                count++;
             }
+            check(str(56), "PopupOptAutoCenter.bmp", str(57), str(58), settings.TS1AutoCenter, (on) =>
+            {
+                VMSpecialEffect.AutoCenter = on;
+                settings.TS1AutoCenter = on;
+            });
             check(str(59), "PopupOptFreeWill.bmp", str(60), str(61), VM.FreeWillEnabled, (on) =>
             {
                 VM.FreeWillEnabled = on;
-                GlobalSettings.Default.TS1FreeWill = on;
+                settings.TS1FreeWill = on;
             });
-            check(str(62), "PopupOptEdgeScroll.bmp", str(63), str(64), GlobalSettings.Default.EdgeScroll, (on) => GlobalSettings.Default.EdgeScroll = on);
+            check(str(62), "PopupOptEdgeScroll.bmp", str(63), str(64), settings.EdgeScroll, (on) => settings.EdgeScroll = on);
+            check(str(65), "PopupOptSimInBack.bmp", str(66).Trim(), str(67), settings.TS1SimInBackground, (on) => settings.TS1SimInBackground = on);
             check("Classic UI", null, "About Classic UI",
                 "Draws the control panel, panels and dialogs with the original art from your copy of The Sims. Turn it off to use Simitone's own interface.",
                 true, (on) =>

@@ -368,6 +368,28 @@ namespace Simitone.Client.UI.Screens
             vm.ResetTickAlign();
         }
 
+        private int SpeedBeforeBackground; //the speed to go back to when the window is active again (0: not paused for it)
+
+        /// <summary>
+        /// TS1's Sim In Background option: when it's off, the game pauses while its window isn't active.
+        /// </summary>
+        private void UpdateBackgroundPause()
+        {
+            if (vm == null) return;
+            var pause = !GameFacade.Focus && !GlobalSettings.Default.TS1SimInBackground;
+            if (pause && vm.SpeedMultiplier > 0)
+            {
+                SpeedBeforeBackground = vm.SpeedMultiplier;
+                vm.SpeedMultiplier = 0;
+            }
+            else if (!pause && SpeedBeforeBackground > 0 && vm.SpeedMultiplier >= 0)
+            {
+                //back in live mode, unless the player changed the speed meanwhile
+                if (vm.SpeedMultiplier == 0) vm.SpeedMultiplier = SpeedBeforeBackground;
+                SpeedBeforeBackground = 0;
+            }
+        }
+
         public override void Update(FSO.Common.Rendering.Framework.Model.UpdateState state)
         {
             GameFacade.Game.IsFixedTimeStep = (vm == null || vm.Ready);
@@ -387,6 +409,7 @@ namespace Simitone.Client.UI.Screens
                 GameThread.NextUpdate((FSO.Common.Rendering.Framework.Model.UpdateState ustate) => ChangeSpeedTo(0));
             }
             base.Update(state);
+            UpdateBackgroundPause();
 
             // Update weather effects (sounds and terrain)
             UpdateWeatherEffects();

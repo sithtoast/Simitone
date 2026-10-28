@@ -148,6 +148,7 @@ namespace Simitone.Client
             
             // Initialize Free Will setting from config
             VM.FreeWillEnabled = GlobalSettings.Default.TS1FreeWill;
+            FSO.SimAntics.Primitives.VMSpecialEffect.AutoCenter = GlobalSettings.Default.TS1AutoCenter;
             
             base.Initialize();
 

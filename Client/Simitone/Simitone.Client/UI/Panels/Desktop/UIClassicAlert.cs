@@ -20,7 +20,7 @@ namespace Simitone.Client.UI.Panels.Desktop
     {
         private static readonly Color Body = new Color(0, 1, 82);
         private static readonly Color TextColor = new Color(200, 206, 214);
-        private const int ButtonWidth = 94;
+        private const int ButtonWidth = 94; //at least; longer captions widen it
         private const int ButtonGap = 16;
         private static Texture2D Glow;
 
@@ -32,6 +32,7 @@ namespace Simitone.Client.UI.Panels.Desktop
         private TextStyle Style;
         private string Message;
         private TextRendererResult MessageText;
+        private bool TextDirty;
         private Rectangle MessageArea;
         private List<UIButton> Buttons = new List<UIButton>();
         private UITextBox TextBox;
@@ -51,6 +52,12 @@ namespace Simitone.Client.UI.Panels.Desktop
             Style = TextStyle.DefaultLabel.Clone();
             Style.Size = 11;
             Style.Color = TextColor;
+            var buttonStyle = Style.Clone();
+            buttonStyle.Size = 12;
+            var captions = options.Buttons.Select(x => x.Text ?? DefaultCaption(x.Type)).ToList();
+            //the slanted ends take about 15px each
+            var widths = captions.Select(x => Math.Max(ButtonWidth, (int)buttonStyle.MeasureString(x).X + 36)).ToList();
+            Width = Math.Max(Width, widths.Sum() + Math.Max(0, widths.Count - 1) * ButtonGap + 60);
 
             var title = Style.Clone();
             title.Size = 13;
@@ -66,15 +73,7 @@ namespace Simitone.Client.UI.Panels.Desktop
             //the message sits right of the icon, or across the dialog without one
             var textX = (Icon != null) ? 128 : 30;
             MessageArea = new Rectangle(textX, 56, Width - textX - 30, 0);
-            MessageText = TextRenderer.ComputeText(Message, new TextRendererOptions
-            {
-                Alignment = TextAlignment.Center | TextAlignment.Top,
-                MaxWidth = MessageArea.Width,
-                Position = new Vector2(MessageArea.X, MessageArea.Y),
-                Scale = Vector2.One,
-                TextStyle = Style,
-                WordWrap = true
-            }, this);
+            ComputeText();
             var textBottom = MessageArea.Y + Math.Max(MessageText.BoundingBox.Height + 14, 40);
             var y = Math.Max(textBottom, (Icon != null) ? 112 : 0) + 12;
 
@@ -95,16 +94,15 @@ namespace Simitone.Client.UI.Panels.Desktop
                 y += 22 + 16;
             }
 
-            foreach (var opt in options.Buttons)
+            for (int i = 0; i < options.Buttons.Length; i++)
             {
+                var opt = options.Buttons[i];
                 var btn = new UIButton(ClassicUIGraphics.Get("cpanel/Buttons/ButtonTileDialog.BMP"))
                 {
-                    Caption = opt.Text ?? DefaultCaption(opt.Type),
-                    Width = ButtonWidth
+                    Caption = captions[i],
+                    CaptionStyle = buttonStyle,
+                    Width = widths[i]
                 };
-                var style = Style.Clone();
-                style.Size = 12;
-                btn.CaptionStyle = style;
                 ButtonClickDelegate handler = opt.Handler ?? ((b) => Close());
                 btn.OnButtonClick += handler;
                 if (TextBox != null && Buttons.Count == 0) TextBox.OnEnterPress += (elem) => handler(btn); //enter confirms, like the first button
@@ -113,12 +111,39 @@ namespace Simitone.Client.UI.Panels.Desktop
             }
 
             Height = Math.Max(206, y + 33 + 22);
-            var total = Buttons.Count * ButtonWidth + Math.Max(0, Buttons.Count - 1) * ButtonGap;
-            for (int i = 0; i < Buttons.Count; i++)
-                Buttons[i].Position = new Vector2((Width - total) / 2 + i * (ButtonWidth + ButtonGap), Height - 22 - 33);
+            var total = widths.Sum() + Math.Max(0, widths.Count - 1) * ButtonGap;
+            var bx = (Width - total) / 2;
+            foreach (var btn in Buttons)
+            {
+                btn.Position = new Vector2(bx, Height - 22 - 33);
+                bx += (int)btn.Width + ButtonGap;
+            }
 
             if (Glow == null) Glow = MakeGlow();
             GameResized();
+        }
+
+        /// <summary>
+        /// Lays out the message. The result is in screen space, so it's redone whenever the dialog moves.
+        /// </summary>
+        private void ComputeText()
+        {
+            MessageText = TextRenderer.ComputeText(Message, new TextRendererOptions
+            {
+                Alignment = TextAlignment.Center | TextAlignment.Top,
+                MaxWidth = MessageArea.Width,
+                Position = new Vector2(MessageArea.X, MessageArea.Y),
+                Scale = Vector2.One,
+                TextStyle = Style,
+                WordWrap = true
+            }, this);
+            TextDirty = false;
+        }
+
+        public override void CalculateMatrix()
+        {
+            base.CalculateMatrix();
+            TextDirty = true;
         }
 
         private static string DefaultCaption(UIAlertButtonType type)
@@ -145,7 +170,7 @@ namespace Simitone.Client.UI.Panels.Desktop
                 {
                     var d = Vector2.Distance(new Vector2(x + 0.5f, y + 0.5f), new Vector2(size / 2f)) / (size / 2f);
                     var a = MathHelper.Clamp(1 - d, 0, 1);
-                    data[y * size + x] = new Color(8, 44, 150) * (a * a);
+                    data[y * size + x] = new Color(24, 72, 196) * (float)Math.Pow(a, 1.5);
                 }
             }
             var tex = new Texture2D(GameFacade.GraphicsDevice, size, size);
@@ -213,6 +238,7 @@ namespace Simitone.Client.UI.Panels.Desktop
             }
 
             base.Draw(batch);
+            if (TextDirty) ComputeText();
             TextRenderer.DrawText(MessageText.DrawingCommands, this, batch);
         }
     }

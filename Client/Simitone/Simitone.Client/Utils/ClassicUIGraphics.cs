@@ -55,6 +55,11 @@ namespace Simitone.Client.Utils
         }
 
         /// <summary>
+        /// Finds a file in the TS1 install, ignoring case, such as ("GameData", "Build.iff"). Null if it isn't there.
+        /// </summary>
+        public static string FindGameFile(params string[] parts) => FindFile(Content.Get().TS1BasePath, parts);
+
+        /// <summary>
         /// Finds a file below the base folder, ignoring case (installs copied from Windows can differ on other platforms).
         /// </summary>
         private static string FindFile(string baseDir, params string[] parts)

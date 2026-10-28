@@ -368,6 +368,8 @@ namespace Simitone.Client.UI.Screens
             vm.ResetTickAlign();
         }
 
+        public UndoHistory Undo; //buy and build mode's undo and redo
+
         private int SpeedBeforeBackground; //the speed to go back to when the window is active again (0: not paused for it)
 
         /// <summary>
@@ -410,6 +412,7 @@ namespace Simitone.Client.UI.Screens
             }
             base.Update(state);
             UpdateBackgroundPause();
+            Undo?.Update();
 
             // Update weather effects (sounds and terrain)
             UpdateWeatherEffects();
@@ -600,9 +603,11 @@ namespace Simitone.Client.UI.Screens
             GameFacade.Scenes.Add(World);
 
             var globalLink = new VMTS1GlobalLinkStub();
-            Driver = new VMServerDriver(globalLink);
+            var driver = new UndoDriver(globalLink);
+            Driver = driver;
 
             vm = new VM(new VMContext(World), Driver, new UIHeadlineRendererProvider());
+            driver.History = Undo = new UndoHistory(vm);
             vm.ListenBHAVChanges();
             vm.Init();
 

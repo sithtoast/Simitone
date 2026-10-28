@@ -390,6 +390,27 @@ if [[ "$PUBLISH" == "--publish" ]]; then
         fi
     }
 
+    # Sign a macOS app bundle. SIMITONE_SIGN_IDENTITY selects the certificate (e.g.
+    # "Developer ID Application: Name (TEAMID)"); without it the app is signed ad hoc.
+    # Real identities get Hardened Runtime and a secure timestamp, as notarization requires.
+    # Ad hoc builds can't use Hardened Runtime: its library validation rejects ad hoc signed
+    # libraries ("different Team IDs"), so the .NET host couldn't load its own runtime.
+    sign_mac_app() {
+        local app="$1"
+        local identity="${SIMITONE_SIGN_IDENTITY:--}"
+        local entitlements="$SCRIPT_DIR/Client/Simitone/Simitone.Desktop/Mac/Simitone.entitlements"
+        local opts=(--force --sign "$identity")
+        [[ "$identity" != "-" ]] && opts+=(--options runtime --timestamp)
+
+        echo "  Signing with: $([[ "$identity" == "-" ]] && echo "ad hoc" || echo "$identity")"
+        # every nested file first (dylibs, managed .dlls, .json), then the bundle and its executable
+        find "$app/Contents/MacOS" -type f ! -path "$app/Contents/MacOS/Simitone" -print0 \
+            | xargs -0 -n 40 codesign "${opts[@]}" 2>&1 | grep -v "replacing existing signature" || true
+        codesign "${opts[@]}" --entitlements "$entitlements" "$app"
+        codesign --verify --deep --strict "$app"
+        echo "✓ Signature verified"
+    }
+
     # macOS: Eto.Platform.Mac64 has already wrapped the self-contained publish in Simitone.app
     # (Eto.Mac only works from inside an .app bundle), so ship that instead of launcher + lib/.
     if [[ "$PLATFORM_NAME" == "macOS" ]]; then
@@ -407,11 +428,39 @@ if [[ "$PUBLISH" == "--publish" ]]; then
         prune_published_files "$FINAL_DIR/Simitone.app/Contents/MacOS"
         rm -rf "$TEMP_PUBLISH_DIR"
 
-        # No bundle-level codesign: codesign treats every file in Contents/MacOS (the managed .dlls)
-        # as nested code and refuses to seal it. The apphost and native dylibs each carry their own
-        # (ad hoc / vendor) signatures, which is all Apple Silicon needs to run a local build.
-        xattr -cr "$FINAL_DIR/Simitone.app" 2>/dev/null || true
-        echo "✓ Simitone.app ($(du -sh "$FINAL_DIR/Simitone.app" | cut -f1))"
+        # A signed bundle may only hold code in Contents/MacOS, so move the game data to
+        # Contents/Resources (Program.cs switches the working directory there at startup).
+        APP="$FINAL_DIR/Simitone.app"
+        rm -f "$APP/Contents/Resources/Content" # development builds symlink this instead
+        for item in Content Resources version.txt dao.xml; do
+            if [[ -e "$APP/Contents/MacOS/$item" ]]; then mv "$APP/Contents/MacOS/$item" "$APP/Contents/Resources/"; fi
+        done
+        # 3D mode creates this if missing, which would modify the signed bundle
+        mkdir -p "$APP/Contents/Resources/Content/MeshReplace"
+
+        # Homebrew's source-built .NET (brew install dotnet) ships runtime libraries linked against
+        # Homebrew (e.g. brotli), which only exist on this Mac. Refuse to package those.
+        local_deps=""
+        for lib in "$APP/Contents/MacOS/"*.dylib; do
+            own_id="$(otool -D "$lib" | tail -n +2)"
+            bad="$(otool -L "$lib" | tail -n +2 | awk '{print $1}' | grep -v -x -F "$own_id" | grep -E '^/opt/homebrew/|^/usr/local/(opt|Cellar)/' || true)"
+            [[ -n "$bad" ]] && local_deps+="  $(basename "$lib") -> $bad"$'\n'
+        done
+        if [[ -n "$local_deps" ]]; then
+            echo ""
+            echo "ERROR: the bundled .NET runtime depends on Homebrew libraries and won't run on other Macs:"
+            echo -n "$local_deps"
+            echo "Build with Microsoft's .NET SDK instead (https://dotnet.microsoft.com/download), e.g.:"
+            echo "  curl -sSL https://dot.net/v1/dotnet-install.sh | bash -s -- --channel 9.0"
+            echo "  export DOTNET_ROOT=\$HOME/.dotnet PATH=\$HOME/.dotnet:\$PATH"
+            exit 1
+        fi
+
+        # Clear extended attributes before signing: codesign stores the signatures of the
+        # non-Mach-O files in Contents/MacOS (managed .dlls, .json) in extended attributes.
+        xattr -cr "$APP" 2>/dev/null || true
+        sign_mac_app "$APP"
+        echo "✓ Simitone.app ($(du -sh "$APP" | cut -f1))"
 
         echo ""
         echo "========================================"
@@ -423,8 +472,10 @@ if [[ "$PUBLISH" == "--publish" ]]; then
         echo "To run: open \"$FINAL_DIR/Simitone.app\""
         echo "   or:  \"$FINAL_DIR/Simitone.app/Contents/MacOS/Simitone\" -path\"/path/to/The Sims/\""
         echo ""
-        echo "NOTE: If macOS says the app is damaged after downloading it, run:"
-        echo "  xattr -cr Simitone.app"
+        if [[ -z "$SIMITONE_SIGN_IDENTITY" ]]; then
+            echo "NOTE: this build is signed ad hoc. After downloading it, macOS asks to approve it once"
+            echo "      (System Settings > Privacy & Security > Open Anyway)."
+        fi
         exit 0
     fi
 

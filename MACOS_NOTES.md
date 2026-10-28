@@ -102,23 +102,61 @@ Fix (`build-mac-linux.sh`): on macOS, ship `publish/Simitone-macOS-<arch>/Simito
 | OpenGL 4.1 core / MRT shaders | No problems so far. Runs on Apple's Metal-backed GL (`AppleMetalOpenGLRenderer`) with `UseMRT = true`. The neighbourhood, lot view (walls, floors, pool water, terrain, trees, cutaways) and family-picker heads render correctly. The driver logs once: `UNSUPPORTED (log once): POSSIBLE ISSUE: unit 0 GLD_TEXTURE_INDEX_2D is unloadable` (some pass samples an incomplete texture). I didn't find a visible artefact. |
 | Case sensitivity / backslashes | Not a factor on the default case-insensitive APFS. **Untested on a case-sensitive volume.** |
 
+## Signed releases
+
+`./build-mac-linux.sh --publish` always signs `Simitone.app`:
+
+- **Ad hoc** (default): no certificate needed. A downloaded copy asks once to be approved in
+  System Settings > Privacy & Security > Open Anyway.
+- **Developer ID**: set `SIMITONE_SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)"`. Adds
+  Hardened Runtime (with the JIT entitlements in `Simitone.Desktop/Mac/Simitone.entitlements`) and a secure
+  timestamp, so the app can be notarized.
+
+Build releases with **Microsoft's .NET SDK**, not Homebrew's `dotnet`: Homebrew builds .NET from source
+and its runtime libraries link Homebrew's brotli, so the app would only run on Macs with Homebrew (and
+Hardened Runtime refuses them outright). The script stops with an error if it detects this.
+
+```bash
+curl -sSL https://dot.net/v1/dotnet-install.sh | bash -s -- --channel 9.0
+export DOTNET_ROOT=$HOME/.dotnet PATH=$HOME/.dotnet:$PATH
+export SIMITONE_SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)"
+./build-mac-linux.sh --publish            # SIMITONE_ARCH=x64 for an Intel build
+
+APP=publish/Simitone-macOS-arm64/Simitone.app
+ditto -c -k --sequesterRsrc --keepParent "$APP" Simitone.zip
+xcrun notarytool submit Simitone.zip --keychain-profile YOUR_PROFILE --wait
+xcrun stapler staple "$APP"
+spctl -a -vv -t exec "$APP"               # expect: accepted, source=Notarized Developer ID
+```
+
+Don't run the app between signing and notarizing: anything it writes into the bundle breaks the seal.
+
+Layout: game data lives in `Contents/Resources` (`Content/`, `Resources/`, `version.txt`, `dao.xml`), since
+a signed bundle may only hold code in `Contents/MacOS`. `Program.cs` switches the working directory there
+at startup. Development builds keep `Content/` next to the executable.
+
+**CI** (`.github/workflows/build.yml`) signs and notarizes both architectures when these repository
+secrets are set, and signs ad hoc otherwise:
+
+| Secret | Value |
+| --- | --- |
+| `MACOS_CERTIFICATE` | `base64 -i cert.p12` of the "Developer ID Application" certificate exported with its private key from Keychain Access |
+| `MACOS_CERTIFICATE_PWD` | the password chosen for that `.p12` export |
+| `NOTARY_KEY` | `base64 -i AuthKey_XXXX.p8`, an App Store Connect API key (Users and Access > Integrations > Team Keys, "Developer" role) |
+| `NOTARY_KEY_ID` | that key's ID |
+| `NOTARY_ISSUER_ID` | the issuer ID shown on the same page |
+
 ## Not verified / known issues
 
 - **Sims on a live lot**: avatar rendering, animation and gameplay weren't checked on an occupied lot.
   I drove the UI with synthesized clicks and couldn't get a family moved in, so someone needs to play
   a household by hand.
 - **Audio**: OpenAL loads and initialises without errors, but I didn't listen to it.
-- **Intel Macs**: the natives are universal, but the `osx-x64` build wasn't run.
+- **Intel Macs**: only run under Rosetta on Apple Silicon, not on real Intel hardware.
 - **Framework-dependent `Simitone.app` from `bin/`** can't be opened from Finder with Homebrew's keg-only
   `dotnet@9`: "You must install .NET to run this application" (the apphost only looks in
   `/usr/local/share/dotnet` or `DOTNET_ROOT`). Use the `--publish` bundle, or the official .NET pkg.
-- **Code signing**: the bundle isn't signed at the bundle level. `codesign` treats every file in
-  `Contents/MacOS` (the ~400 managed `.dll`s) as nested code and refuses to seal it. `--deep` also trips
-  over `Content/UI/hints/*.dir`. The apphost and native dylibs carry their own signatures, which is
-  enough to run a local build. A downloaded copy needs `xattr -cr Simitone.app`. Notarized releases would
-  need the managed files moved out of `Contents/MacOS`.
-- **CI (`.github/workflows/build.yml`)** still builds its own launcher + `lib/` layout for macOS and
-  doesn't use `build-mac-linux.sh`. It should be switched to the `.app` packaging in #7. Not changed
-  here because I couldn't test it.
+- **CI notarization** is written but has only been exercised without secrets (ad hoc). Local Developer ID
+  signing + notarization was tested end to end (see "Signed releases").
 - Once I saw the bundle window captured at 221x174. It didn't reproduce over 30 s of sampling (always
   1024x800), so it was probably an animation in progress.

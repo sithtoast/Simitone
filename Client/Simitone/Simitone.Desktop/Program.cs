@@ -30,7 +30,13 @@ namespace Simitone.Windows
         {
             string baseDir = AppDomain.CurrentDomain.BaseDirectory;
             Directory.SetCurrentDirectory(baseDir);
-            
+
+            // Release .app bundles keep game data in Contents/Resources, since a signed bundle may only
+            // hold code in Contents/MacOS. (Development bundles still have Content/ next to the executable.)
+            var bundleResources = Path.GetFullPath(Path.Combine(baseDir, "../Resources/"));
+            if (!Directory.Exists(Path.Combine(baseDir, "Content")) && Directory.Exists(Path.Combine(bundleResources, "Content")))
+                Directory.SetCurrentDirectory(bundleResources);
+
             OperatingSystem os = Environment.OSVersion;
             PlatformID pid = os.Platform;
             bool linux = pid == PlatformID.MacOSX || pid == PlatformID.Unix;

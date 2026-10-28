@@ -75,6 +75,16 @@ namespace Simitone.Client.Utils
         }
 
         /// <summary>
+        /// A file's bytes from the archive, such as "Fonts/variablesans_10.ffn", or null if it isn't there.
+        /// </summary>
+        public static byte[] GetFile(string path)
+        {
+            Init();
+            if (Archive == null || !Entries.TryGetValue(path, out var entry)) return null;
+            lock (Archive) return Archive.GetEntry(entry);
+        }
+
+        /// <summary>
         /// A texture from the archive, such as "cpanel/Buttons/people.bmp", or null if it isn't there.
         /// </summary>
         public static Texture2D Get(string path)

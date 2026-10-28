@@ -32,8 +32,7 @@ namespace Simitone.Client.UI.Panels.Desktop
 
         protected static TextStyle Style(int size)
         {
-            var style = TextStyle.DefaultLabel.Clone();
-            style.Size = size;
+            var style = ClassicFont.Style(size);
             style.Color = Color.White;
             return style;
         }
@@ -183,8 +182,7 @@ namespace Simitone.Client.UI.Panels.Desktop
             var bg = ClassicUIGraphics.Get("cpanel/Backgrounds/PopupInfo.BMP");
             Add(Background = new UIImage(bg));
             Add(Picture = new UIImage() { Position = new Vector2(10, 12) });
-            var title = TextStyle.DefaultLabel.Clone();
-            title.Size = 12;
+            var title = ClassicFont.Style(12);
             title.Color = Color.White;
             Add(Title = new UILabel() { CaptionStyle = title, Position = new Vector2(156, 8), Size = new Vector2(bg.Width - 170, 20), Alignment = TextAlignment.Left | TextAlignment.Top });
             var text = title.Clone();

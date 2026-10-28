@@ -49,8 +49,7 @@ namespace Simitone.Client.UI.Panels.Desktop
             Message = options.Message ?? "";
             Width = Math.Max(412, Math.Min(560, 300 + Message.Length));
 
-            Style = TextStyle.DefaultLabel.Clone();
-            Style.Size = 11;
+            Style = ClassicFont.Style(11);
             Style.Color = TextColor;
             var buttonStyle = Style.Clone();
             buttonStyle.Size = 12;

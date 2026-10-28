@@ -315,8 +315,7 @@ namespace Simitone.Client.UI.Panels.Desktop
                 SpeedButtons[i].OnButtonClick += (b) => SwitchSpeed(speed);
             }
 
-            var green = TextStyle.DefaultLabel.Clone();
-            green.Size = 10;
+            var green = ClassicFont.Style(10);
             green.Color = new Color(48, 232, 96);
 
             Add(AmPm = new UIImage(tex("Buttons/AMPM.BMP")) { Position = new Vector2(104, 123), SourceRectangle = new Rectangle(0, 0, 18, 7) });

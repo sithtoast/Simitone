@@ -37,8 +37,7 @@ namespace Simitone.Client.UI.Panels.Desktop
 
         protected static TextStyle Style(int size)
         {
-            var style = TextStyle.DefaultLabel.Clone();
-            style.Size = size;
+            var style = ClassicFont.Style(size);
             style.Color = Color.White;
             return style;
         }
@@ -461,8 +460,7 @@ namespace Simitone.Client.UI.Panels.Desktop
             }
             if (item.Count > 1)
             {
-                var style = TextStyle.DefaultLabel.Clone();
-                style.Size = 8;
+                var style = ClassicFont.Style(8);
                 style.Color = Color.White;
                 style.Shadow = true;
                 Add(new UILabel()

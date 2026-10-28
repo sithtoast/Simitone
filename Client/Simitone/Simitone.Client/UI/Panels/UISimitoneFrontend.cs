@@ -43,6 +43,8 @@ namespace Simitone.Client.UI.Panels
         {
             var ui = Content.Get().CustomUI;
             Game = screen;
+            //panels made below use Game.Frontend, and lots without a family switch to buy mode before this returns
+            Game.Frontend = this;
 
             if (!Game.Desktop)
             {
@@ -103,7 +105,7 @@ namespace Simitone.Client.UI.Panels
             {
                 MainPanel.SetMode(UIMainPanelMode.BUY);
                 ModeSwitcher?.EndSwitch(MainPanel.Mode);
-                MainPanel.Open();
+                if (ClassicMode == null) MainPanel.Open(); //the classic buy panel replaces it
             } else
             {
                 FSO.HIT.HITVM.Get().PlaySoundEvent(UIMusic.None);

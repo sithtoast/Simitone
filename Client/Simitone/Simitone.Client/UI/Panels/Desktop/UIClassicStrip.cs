@@ -68,9 +68,12 @@ namespace Simitone.Client.UI.Panels.Desktop
         public event Action<bool> OnToggle;
         public event Action<bool> OnHover;
 
-        public UIClassicCheckbox(string caption, TextStyle style, int width)
+        /// <summary>
+        /// A checkbox, or with radio a radio button (optradio.bmp, the same frames), which clicking only ever turns on.
+        /// </summary>
+        public UIClassicCheckbox(string caption, TextStyle style, int width, bool radio = false)
         {
-            Tex = ClassicUIGraphics.Get("cpanel/Buttons/optcheckbox.bmp");
+            Tex = ClassicUIGraphics.Get(radio ? "cpanel/Buttons/optradio.bmp" : "cpanel/Buttons/optcheckbox.bmp");
             Add(Label = new UILabel() { Caption = caption, CaptionStyle = style, Position = new Vector2(26, 0), Size = new Vector2(width - 26, 21), Alignment = TextAlignment.Left | TextAlignment.Middle });
             ListenForMouse(new Rectangle(0, 0, width, 21), (type, state) =>
             {
@@ -79,7 +82,7 @@ namespace Simitone.Client.UI.Panels.Desktop
                     case UIMouseEventType.MouseOver: Hover = true; OnHover?.Invoke(true); break;
                     case UIMouseEventType.MouseOut: Hover = false; OnHover?.Invoke(false); break;
                     case UIMouseEventType.MouseUp:
-                        if (Disabled) break;
+                        if (Disabled || (radio && Checked)) break;
                         Checked = !Checked;
                         FSO.HIT.HITVM.Get().PlaySoundEvent(FSO.Client.UI.Model.UISounds.Click);
                         OnToggle?.Invoke(Checked);
@@ -170,7 +173,7 @@ namespace Simitone.Client.UI.Panels.Desktop
     /// </summary>
     public class UIClassicInfoPopup : UIContainer
     {
-        private UIImage Background;
+        protected UIImage Background;
         private UIImage Picture;
         private UILabel Title;
         private UILabel Text;
@@ -206,6 +209,12 @@ namespace Simitone.Client.UI.Panels.Desktop
                 Picture.SetSize(src.Width * scale, src.Height * scale);
                 Picture.Position = new Vector2(10 + (133 - src.Width * scale) / 2, 12 + (103 - src.Height * scale) / 2);
             }
+            //without a picture the text has the whole width
+            var left = (picture == null) ? 14 : 156;
+            Title.Position = new Vector2(left, 8);
+            Title.Size = new Vector2(Background.Texture.Width - left - 14, 20);
+            Text.Position = new Vector2(left, 30);
+            Text.Size = new Vector2(Background.Texture.Width - left - 10, Text.Size.Y);
             Title.Caption = title;
             Text.Caption = text;
             //long descriptions need more room than the art's height (the measured height falls a line short)
@@ -226,5 +235,40 @@ namespace Simitone.Client.UI.Panels.Desktop
         }
 
         public void Hide() => Visible = false;
+    }
+
+    /// <summary>
+    /// A help tip shown for a while at the top of the screen, for TS1's Quick Tips option: the help system's
+    /// popups appear without pausing the game or needing a click. A new tip replaces the last.
+    /// </summary>
+    public class UIClassicQuickTip : UIClassicInfoPopup
+    {
+        private static UIClassicQuickTip Current;
+        private float TimeLeft;
+
+        private UIClassicQuickTip() : base(0) { }
+
+        public static void ShowTip(UIContainer screen, string title, string text)
+        {
+            if (Current?.Parent != null) Current.Parent.Remove(Current);
+            Current = new UIClassicQuickTip();
+            Current.Show(null, title, text);
+            //centred at the top, clear of the action queue at the top left
+            Current.Position = new Vector2((UIScreen.Current.ScreenWidth - Current.Background.Texture.Width) / 2, 8);
+            //long enough to read: a few seconds, and more for longer tips
+            Current.TimeLeft = 6 + text.Length / 40f;
+            screen.Add(Current);
+        }
+
+        public override void Update(UpdateState state)
+        {
+            base.Update(state);
+            TimeLeft -= 1 / 60f;
+            if (TimeLeft <= 0 && Parent != null)
+            {
+                Parent.Remove(this);
+                if (Current == this) Current = null;
+            }
+        }
     }
 }

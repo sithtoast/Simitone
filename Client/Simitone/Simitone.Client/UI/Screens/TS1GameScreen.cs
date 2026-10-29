@@ -673,6 +673,7 @@ namespace Simitone.Client.UI.Screens
 
             Frontend = new UISimitoneFrontend(this);
             this.Add(Frontend);
+            this.Add(new UIPictureInPicture());
         }
 
         public void ShowLoadErrors(List<VMLoadError> errors, bool verbose)
@@ -789,6 +790,7 @@ namespace Simitone.Client.UI.Screens
 
             Frontend = new UISimitoneFrontend(this);
             this.Add(Frontend);
+            this.Add(new UIPictureInPicture());
         }
 
         public void LoadSurrounding(short houseID)
@@ -894,6 +896,9 @@ namespace Simitone.Client.UI.Screens
                 case VMEventType.TS1BuildBuyChange:
                     Frontend?.ModeSwitcher?.UpdateBuildBuy();
                     Frontend?.DesktopUCP?.UpdateBuildBuy();
+                    break;
+                case VMEventType.TS1SpecialEffect:
+                    SpecialEffects.Layer.Handle((FSO.SimAntics.Primitives.VMSpecialEffectEvent)data);
                     break;
             }
         }
@@ -1024,6 +1029,12 @@ namespace Simitone.Client.UI.Screens
 
             Content.Get().Neighborhood.SaveHouse(vm.GetGlobalValue(10), iff);
             Content.Get().Neighborhood.SaveNeighbourhood(true);
+            if (GlobalSettings.Default.TS1ExportHTML)
+            {
+                //TS1's Export HTML: the family's web pages, with the lot's picture just taken
+                try { FamilyWebPages.Export(vm, thumb); }
+                catch (Exception) { }
+            }
 
             // Write weather sidecar alongside the save
             var weatherData = vm.Context.Blueprint?.Weather?.WeatherData ?? (short)(1 << 8);

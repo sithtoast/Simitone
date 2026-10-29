@@ -34,6 +34,7 @@ using Simitone.Client.UI.Screens;
 using FSO.LotView.RC;
 using Simitone.Client.UI.Panels.LotControls;
 using Simitone.Client.UI.Panels.Desktop;
+using Simitone.Client.Utils;
 using Simitone.Client.UI.Model;
 using FSO.Client.UI.Panels.LotControls;
 using FSO.UI.Panels.LotControls;
@@ -223,6 +224,18 @@ namespace Simitone.Client.UI.Panels
             var b2Event = (info.Block) ? new ButtonClickDelegate(DialogButton2) : null;
 
             VMDialogType type = (info.Operand == null) ? VMDialogType.Message : info.Operand.Type;
+
+            //TS1's Quick Tips: the help system's popups show for a while, without stopping the game or needing a click
+            if (type == VMDialogType.Sims1Tutorial && GlobalSettings.Default.TS1QuickTips && ClassicUIGraphics.Available)
+            {
+                if (info.Block)
+                {
+                    LastDialogID = info.DialogID;
+                    vm.SendCommand(new VMNetDialogResponseCmd { ResponseCode = 0, ResponseText = "" });
+                }
+                UIClassicQuickTip.ShowTip(Parent, info.Title, info.Message);
+                return;
+            }
 
             switch (type)
             {

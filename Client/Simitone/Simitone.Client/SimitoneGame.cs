@@ -153,6 +153,7 @@ namespace Simitone.Client
             
             // Initialize Free Will setting from config
             VM.FreeWillEnabled = GlobalSettings.Default.TS1FreeWill;
+            FSO.SimAntics.Primitives.VMSpecialEffect.AutoCenter = GlobalSettings.Default.TS1AutoCenter;
             
             base.Initialize();
 
@@ -202,6 +203,7 @@ namespace Simitone.Client
 
             WorldContent.Init(this.Services, Content.RootDirectory);
             base.Screen.Layers.Add(SceneMgr);
+            base.Screen.Layers.Add(SpecialEffects.Layer); //snapshots of the lot without the UI, and picture in picture
             base.Screen.Layers.Add(uiLayer);
             GameFacade.LastUpdateState = base.Screen.State;
 
@@ -232,7 +234,9 @@ namespace Simitone.Client
                 AA = settings.AntiAlias,
                 Directional = settings.DirectionalLight3D,
                 Complex = settings.ComplexShaders,
-                EnableTransitions = settings.EnableTransitions
+                EnableTransitions = settings.EnableTransitions,
+                TerrainDetail = settings.TS1TerrainDetail,
+                CharacterDetail = settings.TS1CharacterDetail
             };
         }
 

@@ -405,6 +405,30 @@ namespace Simitone.Client.UI.Screens
             vm.ResetTickAlign();
         }
 
+        public UndoHistory Undo; //buy and build mode's undo and redo
+
+        private int SpeedBeforeBackground; //the speed to go back to when the window is active again (0: not paused for it)
+
+        /// <summary>
+        /// TS1's Sim In Background option: when it's off, the game pauses while its window isn't active.
+        /// </summary>
+        private void UpdateBackgroundPause()
+        {
+            if (vm == null) return;
+            var pause = !GameFacade.Focus && !GlobalSettings.Default.TS1SimInBackground;
+            if (pause && vm.SpeedMultiplier > 0)
+            {
+                SpeedBeforeBackground = vm.SpeedMultiplier;
+                vm.SpeedMultiplier = 0;
+            }
+            else if (!pause && SpeedBeforeBackground > 0 && vm.SpeedMultiplier >= 0)
+            {
+                //back in live mode, unless the player changed the speed meanwhile
+                if (vm.SpeedMultiplier == 0) vm.SpeedMultiplier = SpeedBeforeBackground;
+                SpeedBeforeBackground = 0;
+            }
+        }
+
         public override void Update(FSO.Common.Rendering.Framework.Model.UpdateState state)
         {
             GameFacade.Game.IsFixedTimeStep = (vm == null || vm.Ready);
@@ -426,6 +450,8 @@ namespace Simitone.Client.UI.Screens
             }
             base.Update(state);
             UpdateAutoFastForward();
+            UpdateBackgroundPause();
+            Undo?.Update();
 
             // Update weather effects (sounds and terrain)
             UpdateWeatherEffects();
@@ -616,9 +642,11 @@ namespace Simitone.Client.UI.Screens
             GameFacade.Scenes.Add(World);
 
             var globalLink = new VMTS1GlobalLinkStub();
-            Driver = new VMServerDriver(globalLink);
+            var driver = new UndoDriver(globalLink);
+            Driver = driver;
 
             vm = new VM(new VMContext(World), Driver, new UIHeadlineRendererProvider());
+            driver.History = Undo = new UndoHistory(vm);
             vm.ListenBHAVChanges();
             vm.Init();
 
@@ -684,6 +712,7 @@ namespace Simitone.Client.UI.Screens
 
             Frontend = new UISimitoneFrontend(this);
             this.Add(Frontend);
+            this.Add(new UIPictureInPicture());
         }
 
         public void ShowLoadErrors(List<VMLoadError> errors, bool verbose)
@@ -800,6 +829,7 @@ namespace Simitone.Client.UI.Screens
 
             Frontend = new UISimitoneFrontend(this);
             this.Add(Frontend);
+            this.Add(new UIPictureInPicture());
         }
 
         public void LoadSurrounding(short houseID)
@@ -905,6 +935,9 @@ namespace Simitone.Client.UI.Screens
                 case VMEventType.TS1BuildBuyChange:
                     Frontend?.ModeSwitcher?.UpdateBuildBuy();
                     Frontend?.DesktopUCP?.UpdateBuildBuy();
+                    break;
+                case VMEventType.TS1SpecialEffect:
+                    SpecialEffects.Layer.Handle((FSO.SimAntics.Primitives.VMSpecialEffectEvent)data);
                     break;
             }
         }
@@ -1035,6 +1068,12 @@ namespace Simitone.Client.UI.Screens
 
             Content.Get().Neighborhood.SaveHouse(vm.GetGlobalValue(10), iff);
             Content.Get().Neighborhood.SaveNeighbourhood(true);
+            if (GlobalSettings.Default.TS1ExportHTML)
+            {
+                //TS1's Export HTML: the family's web pages, with the lot's picture just taken
+                try { FamilyWebPages.Export(vm, thumb); }
+                catch (Exception) { }
+            }
 
             // Write weather sidecar alongside the save
             var weatherData = vm.Context.Blueprint?.Weather?.WeatherData ?? (short)(1 << 8);

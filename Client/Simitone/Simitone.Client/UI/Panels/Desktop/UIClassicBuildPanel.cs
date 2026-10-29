@@ -1,18 +1,22 @@
 using FSO.Client;
 using FSO.Client.UI.Controls;
 using FSO.Client.UI.Framework;
+using FSO.Common.Rendering.Framework.Model;
 using FSO.Content;
+using FSO.Files.Formats.IFF;
+using FSO.Files.Formats.IFF.Chunks;
 using FSO.SimAntics.NetPlay.Model.Commands;
 using Microsoft.Xna.Framework;
 using Simitone.Client.UI.Panels.LiveSubpanels;
 using Simitone.Client.UI.Screens;
+using Simitone.Client.Utils;
 using System;
 using System.Collections.Generic;
 
 namespace Simitone.Client.UI.Panels.Desktop
 {
     /// <summary>
-    /// The classic Build mode panel: the twelve tools, undo and redo, and the chosen tool's catalog. The roof tool also
+    /// The classic Build mode panel: the twelve tools, undo and redo (UndoHistory), and the chosen tool's catalog. The roof tool also
     /// has the pitch buttons, placed as the game's roof string table (147) has them.
     /// </summary>
     public class UIClassicBuildPanel : UIClassicStrip
@@ -26,10 +30,10 @@ namespace Simitone.Client.UI.Panels.Desktop
             ("Terrain", 18), ("Water", 14), ("Wall", 13), ("Wallpaper", 15), ("Stairs", 10), ("Fireplace", 12),
             ("Tree", 11), ("Floor", 16), ("Door", 8), ("Window", 9), ("Roof", 17), ("Hand", -1)
         };
-        //roof pitch buttons: art, position and pitch. Medium is the pitch Simitone gives TS1 lots; the others are by eye
+        //roof pitch buttons: art, position and pitch, as the game stores the pitch in its lots (HOUS)
         private static readonly (string Name, int Y, int String, float Pitch)[] Pitches =
         {
-            ("roofsteep.bmp", 1, 5, 1.0f), ("roofmedium.bmp", 30, 3, 0.66f), ("roofshallow.bmp", 50, 1, 0.4f), ("roofflat.bmp", 71, 12, 0f)
+            ("roofsteep.bmp", 1, 5, 1.0f), ("roofmedium.bmp", 30, 3, 0.6f), ("roofshallow.bmp", 50, 1, 0.4f), ("roofflat.bmp", 71, 12, 0f)
         };
 
         private UIBuyBrowsePanel Engine;
@@ -37,6 +41,31 @@ namespace Simitone.Client.UI.Panels.Desktop
         private UIClassicInfoPopup Popup;
         private List<UIButton> ToolButtons = new List<UIButton>();
         private List<UIButton> PitchButtons = new List<UIButton>();
+        private UIButton UndoButton;
+        private UIButton RedoButton;
+        private static IffFile _BuildStrings;
+        private static bool BuildStringsLoaded;
+
+        /// <summary>
+        /// GameData/Build.iff, which has the build tools' catalog text (the hand's is table 132).
+        /// </summary>
+        private static IffFile BuildStrings
+        {
+            get
+            {
+                if (!BuildStringsLoaded)
+                {
+                    BuildStringsLoaded = true;
+                    var path = ClassicUIGraphics.FindGameFile("GameData", "Build.iff");
+                    try
+                    {
+                        if (path != null) _BuildStrings = new IffFile(path);
+                    }
+                    catch (Exception) { }
+                }
+                return _BuildStrings;
+            }
+        }
 
         public UIClassicBuildPanel(TS1GameScreen game) : base(game)
         {
@@ -53,9 +82,10 @@ namespace Simitone.Client.UI.Panels.Desktop
                 ToolButtons.Add(b);
                 Add(b);
             }
-            //Simitone has no undo yet
-            Add(new UIButton(Tex("Buttons/Undo.BMP")) { Position = new Vector2(222, 20), Tooltip = str(139, 12), Disabled = true });
-            Add(new UIButton(Tex("Buttons/Redo.bmp")) { Position = new Vector2(222, 54), Tooltip = str(139, 13), Disabled = true });
+            Add(UndoButton = new UIButton(Tex("Buttons/Undo.BMP")) { Position = new Vector2(222, 20), Tooltip = str(139, 12), Disabled = true });
+            Add(RedoButton = new UIButton(Tex("Buttons/Redo.bmp")) { Position = new Vector2(222, 54), Tooltip = str(139, 13), Disabled = true });
+            UndoButton.OnButtonClick += (b) => UndoRedo(true);
+            RedoButton.OnButtonClick += (b) => UndoRedo(false);
             Add(new UIImage(Tex("Backgrounds/BuildToothpkLeft.bmp")) { Position = new Vector2(258, 6) });
 
             for (int i = 0; i < Pitches.Length; i++)
@@ -121,12 +151,30 @@ namespace Simitone.Client.UI.Panels.Desktop
             GameResized();
             if (tool.Category == -1)
             {
-                //the hand: nothing to place, just pick up and move things
-                Catalog.SetItems(new List<UICatalogElement>());
+                //the hand: nothing to place, just pick up and move things. Its name and description are in Build.iff
+                var strings = BuildStrings?.Get<STR>(132);
+                Catalog.SetTool(new UIClassicCatalogCell(Tex("Build/HandIcon.bmp"), Tex("Build/PopupHand.bmp"),
+                    strings?.GetString(1) ?? GameFacade.Strings.GetString("139", "11"), strings?.GetString(2) ?? ""));
                 return;
             }
             Engine.InitCategory(tool.Category, true);
             Catalog.SetItems(Engine.FullCategory);
+        }
+
+        private void UndoRedo(bool undo)
+        {
+            //drop whatever is being placed first: it belongs to the lot that's about to be replaced
+            Engine.Deselect();
+            Game.LotControl.ObjectHolder.ClearSelected();
+            if (undo) Game.Undo?.Undo();
+            else Game.Undo?.Redo();
+        }
+
+        public override void Update(UpdateState state)
+        {
+            base.Update(state);
+            UndoButton.Disabled = !(Game.Undo?.CanUndo ?? false);
+            RedoButton.Disabled = !(Game.Undo?.CanRedo ?? false);
         }
 
         public override void GameResized()

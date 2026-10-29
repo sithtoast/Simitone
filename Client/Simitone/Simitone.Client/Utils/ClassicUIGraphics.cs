@@ -55,6 +55,11 @@ namespace Simitone.Client.Utils
         }
 
         /// <summary>
+        /// Finds a file in the TS1 install, ignoring case, such as ("GameData", "Build.iff"). Null if it isn't there.
+        /// </summary>
+        public static string FindGameFile(params string[] parts) => FindFile(Content.Get().TS1BasePath, parts);
+
+        /// <summary>
         /// Finds a file below the base folder, ignoring case (installs copied from Windows can differ on other platforms).
         /// </summary>
         private static string FindFile(string baseDir, params string[] parts)
@@ -67,6 +72,16 @@ namespace Simitone.Client.Utils
                     .FirstOrDefault(x => string.Equals(Path.GetFileName(x), part, StringComparison.OrdinalIgnoreCase));
             }
             return (path != null && File.Exists(path)) ? path : null;
+        }
+
+        /// <summary>
+        /// A file's bytes from the archive, such as "Fonts/variablesans_10.ffn", or null if it isn't there.
+        /// </summary>
+        public static byte[] GetFile(string path)
+        {
+            Init();
+            if (Archive == null || !Entries.TryGetValue(path, out var entry)) return null;
+            lock (Archive) return Archive.GetEntry(entry);
         }
 
         /// <summary>

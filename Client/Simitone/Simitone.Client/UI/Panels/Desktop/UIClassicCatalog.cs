@@ -37,6 +37,7 @@ namespace Simitone.Client.UI.Panels.Desktop
         private UIClassicInfoPopup Popup;
         private int Columns;
         private int Page;
+        private UIClassicCatalogCell Tool;
 
         public UIClassicCatalog(UIBuyBrowsePanel engine, UIClassicInfoPopup popup)
         {
@@ -64,9 +65,20 @@ namespace Simitone.Client.UI.Panels.Desktop
         public void SetItems(List<UICatalogElement> items)
         {
             Items = items;
+            Tool = null;
             Page = 0;
             Engine.Deselect();
             Engine.FilterCategory = items;
+            Refresh();
+        }
+
+        /// <summary>
+        /// Shows a tool with nothing to buy (the hand) as a single cell, always chosen, in place of the items.
+        /// </summary>
+        public void SetTool(UIClassicCatalogCell tool)
+        {
+            SetItems(new List<UICatalogElement>());
+            Tool = tool;
             Refresh();
         }
 
@@ -92,6 +104,16 @@ namespace Simitone.Client.UI.Panels.Desktop
             NextButton.Disabled = Page >= pages - 1;
             foreach (var c in Cells) Remove(c);
             Cells.Clear();
+            if (Tool != null)
+            {
+                Tool.Position = new Vector2(11, 2);
+                Tool.Chosen = true;
+                Tool.OnHover -= ShowToolPopup;
+                Tool.OnHover += ShowToolPopup;
+                Add(Tool);
+                Cells.Add(Tool);
+                return;
+            }
             for (int i = Page * perPage; i < Math.Min(Items.Count, (Page + 1) * perPage); i++)
             {
                 var n = i - Page * perPage;
@@ -117,9 +139,16 @@ namespace Simitone.Client.UI.Panels.Desktop
             }
         }
 
+        private void ShowToolPopup(bool hover)
+        {
+            if (hover) Popup.Show(Tool.PopupPicture, Tool.Title, Tool.Description);
+            else Popup.Hide();
+        }
+
         public override void Update(UpdateState state)
         {
             base.Update(state);
+            if (Tool != null) return;
             //the item being placed stays lit
             for (int i = 0; i < Cells.Count; i++) Cells[i].Chosen = Engine.ItemID == Page * Columns * Rows + i;
         }
@@ -140,6 +169,20 @@ namespace Simitone.Client.UI.Panels.Desktop
         public string Description;
         public event Action OnClick;
         public event Action<bool> OnHover;
+
+        /// <summary>
+        /// A tool's cell: its four-frame button art and the popup's picture and text.
+        /// </summary>
+        public UIClassicCatalogCell(Texture2D icon, Texture2D popupPicture, string title, string description)
+        {
+            Frame = ClassicUIGraphics.Get("cpanel/Catalog/ThumbTemplate.BMP");
+            Icon = icon;
+            if (icon != null) IconSource = new Rectangle(0, 0, icon.Width / 4, icon.Height);
+            PopupPicture = popupPicture;
+            Title = title;
+            Description = description;
+            ListenForHover();
+        }
 
         public UIClassicCatalogCell(UICatalogElement elem)
         {
@@ -179,6 +222,11 @@ namespace Simitone.Client.UI.Panels.Desktop
                 var twoFrames = !(Icon.Width / (float)Icon.Height < 1.1f || Icon.Width == 127 || Icon.Width == 128);
                 IconSource = new Rectangle(0, 0, twoFrames ? Icon.Width / 2 : Icon.Width, Icon.Height);
             }
+            ListenForHover();
+        }
+
+        private void ListenForHover()
+        {
             Tooltip = null;
             ListenForMouse(new Rectangle(0, 0, 45, 45), (type, state) =>
             {

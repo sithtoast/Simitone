@@ -258,13 +258,11 @@ namespace Simitone.Client.UI.Panels.Desktop
             Game = game;
             Px = TextureGenerator.GetPxWhite(GameFacade.GraphicsDevice);
 
-            var title = TextStyle.DefaultLabel.Clone();
-            title.Size = 12;
+            var title = ClassicFont.Style(12);
             title.Color = Color.White;
             Add(new UILabel() { Caption = "Needs", CaptionStyle = title, Position = new Vector2(8, 1) });
 
-            var style = TextStyle.DefaultLabel.Clone();
-            style.Size = 8;
+            var style = ClassicFont.Style(8);
             style.Color = Color.White;
             for (int i = 0; i < 8; i++)
             {

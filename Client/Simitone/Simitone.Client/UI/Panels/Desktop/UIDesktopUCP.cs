@@ -68,6 +68,8 @@ namespace Simitone.Client.UI.Panels.Desktop
         private TS1GameScreen Game;
 
         public Func<UIMainPanelMode, bool> OnModeClick;
+        public event Action OnCameraClick; //classic: the camera button, in live mode
+        public UIButton CameraButton;
 
         public string[] FloorNames = new string[]
         {
@@ -274,7 +276,9 @@ namespace Simitone.Client.UI.Panels.Desktop
             Add(BuildButton = btn("arch.bmp", 119, 41, "Build Mode"));
             Add(OptionsButton = btn("options.bmp", 197, 125, "Options"));
 
-            //the camera button's place; TS1's camera isn't supported, so the eyedropper (buy and build modes) uses it
+            //the camera's place, shared with the eyedropper: the camera in live mode, the eyedropper in buy and build
+            Add(CameraButton = btn("camera.bmp", 176, 90, "Camera Mode"));
+            CameraButton.OnButtonClick += (b) => OnCameraClick?.Invoke();
             Add(EyedropperButton = new UIStencilButton(Content.Get().CustomUI.Get("d_live_eyedropper.png").Get(GameFacade.GraphicsDevice))
             {
                 Position = new Vector2(176, 90),
@@ -551,6 +555,11 @@ namespace Simitone.Client.UI.Panels.Desktop
 
             // Show eyedropper in BUY and BUILD modes
             EyedropperButton.Visible = (mode == UIMainPanelMode.BUY || mode == UIMainPanelMode.BUILD);
+            if (CameraButton != null)
+            {
+                CameraButton.Visible = mode == UIMainPanelMode.LIVE;
+                CameraButton.Selected = false;
+            }
             // Reset selection when changing modes
             if (!EyedropperButton.Visible)
             {
@@ -563,6 +572,25 @@ namespace Simitone.Client.UI.Panels.Desktop
         /// <summary>
         /// The swoosh that joins the selected mode button to the panel (classic).
         /// </summary>
+        /// <summary>
+        /// Classic camera mode: the camera button lit, with its swoosh joining it to the camera strip.
+        /// </summary>
+        public void SetCamera(bool on)
+        {
+            if (CameraButton == null) return;
+            CameraButton.Selected = on;
+            if (!on)
+            {
+                SetModePatch(UIMainPanelMode.LIVE);
+                return;
+            }
+            var tex = ClassicUIGraphics.Get("cpanel/Backgrounds/CameraPatch.bmp");
+            ModePatch.Texture = tex;
+            ModePatch.SetSize(tex.Width, tex.Height);
+            ModePatch.Position = new Vector2(167, 76); //its crescent, near the top, cups the camera button
+            Invalidate();
+        }
+
         private void SetModePatch(UIMainPanelMode mode)
         {
             //each patch has a crescent that cups its button, placed under the button

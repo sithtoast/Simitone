@@ -102,8 +102,8 @@ namespace Simitone.Client.Utils
                     if (c == '\0') continue;
                     if (c == ' ')
                     {
-                        //the space has no real metrics; a third of the size is close to the game's word spacing
-                        glyphs.Add((c, new Rectangle(x, y, 0, 0), new Rectangle(0, 0, 0, 0), new Vector3(0, 0, (size + 1) / 3)));
+                        //the space has no real metrics; a third of the size and a bit is close to the game's word spacing
+                        glyphs.Add((c, new Rectangle(x, y, 0, 0), new Rectangle(0, 0, 0, 0), new Vector3(0, 0, (size + 4) / 3)));
                         continue;
                     }
                     //the bearings are each a pixel wider than the game draws them, as the glyphs are padded for smoothing

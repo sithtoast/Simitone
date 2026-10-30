@@ -3,7 +3,6 @@ using FSO.Client.UI.Controls;
 using FSO.Client.UI.Framework;
 using FSO.Common.Rendering.Framework.Model;
 using FSO.Content;
-using FSO.Files.Formats.IFF;
 using FSO.Files.Formats.IFF.Chunks;
 using FSO.SimAntics.NetPlay.Model.Commands;
 using Microsoft.Xna.Framework;
@@ -43,30 +42,6 @@ namespace Simitone.Client.UI.Panels.Desktop
         private List<UIButton> PitchButtons = new List<UIButton>();
         private UIButton UndoButton;
         private UIButton RedoButton;
-        private static IffFile _BuildStrings;
-        private static bool BuildStringsLoaded;
-
-        /// <summary>
-        /// GameData/Build.iff, which has the build tools' catalog text (the hand's is table 132).
-        /// </summary>
-        private static IffFile BuildStrings
-        {
-            get
-            {
-                if (!BuildStringsLoaded)
-                {
-                    BuildStringsLoaded = true;
-                    var path = ClassicUIGraphics.FindGameFile("GameData", "Build.iff");
-                    try
-                    {
-                        if (path != null) _BuildStrings = new IffFile(path);
-                    }
-                    catch (Exception) { }
-                }
-                return _BuildStrings;
-            }
-        }
-
         public UIClassicBuildPanel(TS1GameScreen game) : base(game)
         {
             Engine = new UIBuyBrowsePanel(game, 0, UICatalogMode.Build) { HandleEyedropper = false };
@@ -152,7 +127,7 @@ namespace Simitone.Client.UI.Panels.Desktop
             if (tool.Category == -1)
             {
                 //the hand: nothing to place, just pick up and move things. Its name and description are in Build.iff
-                var strings = BuildStrings?.Get<STR>(132);
+                var strings = ClassicUIGraphics.GetGameData("Build.iff")?.Get<STR>(132);
                 Catalog.SetTool(new UIClassicCatalogCell(Tex("Build/HandIcon.bmp"), Tex("Build/PopupHand.bmp"),
                     strings?.GetString(1) ?? GameFacade.Strings.GetString("139", "11"), strings?.GetString(2) ?? ""));
                 return;

@@ -20,7 +20,7 @@ namespace Simitone.Client.Utils
     /// The game filled in the templates in "UserData/Web Templates", which rely on Netscape and old Internet Explorer
     /// scripting that today's browsers don't run, so these are plain pages with the same things in them: an address
     /// book of the neighbourhood's families, and for each family that's been saved its money, members (face, details,
-    /// personality, skills and job), house and the photos Auto Snapshot took.
+    /// personality, skills and job), house (with the House panel's ratings) and photo album.
     /// </summary>
     public static class FamilyWebPages
     {
@@ -157,11 +157,15 @@ tr:nth-child(even) { background: rgba(255,255,255,0.05); }
             if (!string.IsNullOrEmpty(houseDesc?.Item2)) body.Append("<p>" + Html(houseDesc.Item2) + "</p>");
             var arch = vm.Context.Architecture;
             var floors = Enumerable.Range(0, arch.Stories).Count(l => arch.Floors[l].Any(x => x.Pattern != 0) || arch.Walls[l].Any(x => x.Segments != 0));
-            body.Append("<p>Floors: " + floors + " &nbsp; Value: §" + family.ValueInArch + "</p></div>\n");
+            var stats = HouseStats.Of(vm);
+            body.Append("<p>Floors: " + floors + " &nbsp; Value: §" + family.ValueInArch + " &nbsp; Square feet: " + stats.SquareFeet
+                + " &nbsp; Bedrooms: " + stats.Bedrooms + " &nbsp; Bathrooms: " + stats.Bathrooms + "</p>");
+            body.Append("<table>" + Row("Size", stats.Size * 100) + Row("Furnishings", stats.Furnishings * 100) + Row("Yard", stats.Yard * 100)
+                + Row("Upkeep", stats.Upkeep * 100) + Row("Layout", stats.Layout * 100) + "</table></div>\n");
 
-            //Auto Snapshot's photos, named with their time and caption
+            //the album's photos: Auto Snapshot's and the camera's
             var album = Path.Combine(nhood.UserPath, "PhotoAlbum", AlbumFolder(name));
-            var photos = Directory.Exists(album) ? Directory.GetFiles(album, "*.png").OrderBy(x => x).ToList() : new List<string>();
+            var photos = Directory.Exists(album) ? Directory.GetFiles(album).Where(x => x.EndsWith(".png", StringComparison.OrdinalIgnoreCase) || x.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase)).OrderBy(x => x).ToList() : new List<string>();
             body.Append("<h2>Photo Album</h2>\n");
             if (photos.Count == 0) body.Append("<p>No snapshots yet.</p>");
             else
@@ -171,7 +175,9 @@ tr:nth-child(even) { background: rgba(255,255,255,0.05); }
                 {
                     var file = Path.GetFileName(photo);
                     var caption = Path.GetFileNameWithoutExtension(photo);
-                    caption = (caption.Length > 20) ? caption.Substring(20) : "";
+                    //photos are named with the time they were taken, then their caption, until they're renamed in the album
+                    if (caption.Length >= 19 && DateTime.TryParseExact(caption.Substring(0, 19), "yyyy-MM-dd HH-mm-ss", null, System.Globalization.DateTimeStyles.None, out _))
+                        caption = caption.Substring(19).Trim();
                     body.Append("<figure><img src=\"../../PhotoAlbum/" + Uri.EscapeDataString(AlbumFolder(name)) + "/" + Uri.EscapeDataString(file) + "\" alt=\"\"><figcaption>"
                         + Html(caption) + "</figcaption></figure>");
                 }
@@ -183,13 +189,9 @@ tr:nth-child(even) { background: rgba(255,255,255,0.05); }
         /// <summary>
         /// The family's folder in UserData/PhotoAlbum, as SpecialEffects names it.
         /// </summary>
-        private static string AlbumFolder(string familyName)
-        {
-            var bad = Path.GetInvalidFileNameChars().Concat(new[] { ':', '/', '\\', '?', '*', '"', '<', '>', '|' }).ToArray();
-            return new string(familyName.Select(x => bad.Contains(x) ? '_' : x).ToArray()).Trim();
-        }
+        private static string AlbumFolder(string familyName) => SpecialEffects.Clean(familyName);
 
-        private static string Row(string name, short value)
+        private static string Row(string name, int value)
         {
             var points = Math.Max(0, Math.Min(10, value / 100));
             return "<tr><td>" + name + "</td><td><span class=\"bar\"><span style=\"width:" + (points * 10) + "%\"></span></span> " + points + "</td></tr>";

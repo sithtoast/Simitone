@@ -34,6 +34,8 @@ namespace Simitone.Client.UI.Panels
         //classic UI: the live mode strip that takes the main panel's place in live mode
         public UIClassicLivePanel ClassicLive;
         public UIClassicStrip ClassicMode; //the classic Buy, Build or Options panel, in place of the main panel
+        public UIClassicCameraPanel ClassicCamera; //classic camera mode's strip, in place of live mode's
+        private UIClassicCameraFrame CameraFrame;
         public UICheatTextbox CheatTextbox;
 
         public bool PanelActive;
@@ -83,6 +85,7 @@ namespace Simitone.Client.UI.Panels
                 DesktopUCP = new UIDesktopUCP(screen);
                 PlaceDesktopUCP();
                 DesktopUCP.OnModeClick += LiveButtonClicked;
+                DesktopUCP.OnCameraClick += ToggleCamera;
                 Add(DesktopUCP);
                 UpdateClassicLive();
             }
@@ -324,6 +327,7 @@ namespace Simitone.Client.UI.Panels
                 PlaceDesktopUCP();
                 if (ClassicLive != null) PlaceClassicLive();
                 if (ClassicMode != null) PlaceClassicMode();
+                if (ClassicCamera != null) PlaceClassicCamera();
             }
             MainPanel.Y = Game.ScreenHeight - (128 + 15);
         }
@@ -337,6 +341,8 @@ namespace Simitone.Client.UI.Panels
             Remove(DesktopUCP);
             DesktopUCP = new UIDesktopUCP(Game);
             DesktopUCP.OnModeClick += LiveButtonClicked;
+            DesktopUCP.OnCameraClick += ToggleCamera;
+            CloseCamera();
             DesktopUCP.SetMode(MainPanel.Mode);
             PlaceDesktopUCP();
             Add(DesktopUCP);
@@ -388,6 +394,7 @@ namespace Simitone.Client.UI.Panels
         /// </summary>
         private void UpdateClassicMode(UIMainPanelMode mode)
         {
+            CloseCamera();
             if (ClassicMode != null)
             {
                 ClassicMode.Kill();
@@ -410,6 +417,46 @@ namespace Simitone.Client.UI.Panels
         {
             ClassicMode.Position = new Vector2(DesktopUCP.Size.X, Game.ScreenHeight - UIClassicStrip.StripHeight);
             ClassicMode.GameResized();
+        }
+
+        /// <summary>
+        /// Classic camera mode, from live mode: the camera strip replaces the live strip, and the frame follows the
+        /// mouse over the lot. The camera button or another mode closes it.
+        /// </summary>
+        public void ToggleCamera()
+        {
+            if (ClassicCamera != null)
+            {
+                CloseCamera();
+                return;
+            }
+            if (ClassicLive == null || MainPanel.Mode != UIMainPanelMode.LIVE) return;
+            HITVM.Get().PlaySoundEvent(UISounds.Click);
+            ClassicCamera = new UIClassicCameraPanel(Game);
+            PlaceClassicCamera();
+            ClassicLive.Visible = false;
+            AddBefore(ClassicCamera, DesktopUCP);
+            //under the panels, over the lot
+            CameraFrame = new UIClassicCameraFrame(Game);
+            AddAt(0, CameraFrame);
+            DesktopUCP.SetCamera(true);
+        }
+
+        private void CloseCamera()
+        {
+            if (ClassicCamera == null) return;
+            Remove(ClassicCamera);
+            Remove(CameraFrame);
+            ClassicCamera = null;
+            CameraFrame = null;
+            if (ClassicLive != null) ClassicLive.Visible = MainPanel.Mode == UIMainPanelMode.LIVE;
+            DesktopUCP?.SetCamera(false);
+        }
+
+        private void PlaceClassicCamera()
+        {
+            ClassicCamera.Position = new Vector2(DesktopUCP.Size.X, Game.ScreenHeight - UIClassicStrip.StripHeight);
+            ClassicCamera.GameResized();
         }
 
         private void PlaceClassicLive()

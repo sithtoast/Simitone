@@ -491,4 +491,158 @@ namespace Simitone.Client.UI.Panels.Desktop
             base.Draw(batch);
         }
     }
+
+    /// <summary>
+    /// The classic Interests panel: what the Sim likes to talk about, as each topic's picture and a 10 point bar.
+    /// Adults and children share four of the game's interest slots (Travel or Toys, and so on), and Hot Date's
+    /// topics use older ones; pets have none. Names and descriptions are the game's (GameData/Live.iff, 140 and 142).
+    /// </summary>
+    public class UIClassicInterestsPanel : UIClassicSubpanel
+    {
+        //the topic's string (Live.iff table 140; its art is in the same order), its person data slot, and who has it
+        private enum Who { Everyone, Adults, Children }
+        private static readonly (int Name, string Art, int Slot, Who Who)[] Interests =
+        {
+            (1, "Travel", 46, Who.Adults), (2, "Violence", 47, Who.Adults), (3, "Politics", 48, Who.Adults), (4, "The60s", 49, Who.Adults),
+            (9, "Toys", 46, Who.Children), (10, "Aliens", 47, Who.Children), (11, "Pets", 48, Who.Children), (12, "School", 49, Who.Children),
+            (5, "Weather", 50, Who.Everyone), (6, "Sports", 51, Who.Everyone), (7, "Music", 52, Who.Everyone), (8, "Outdoors", 53, Who.Everyone),
+            (13, "Exercise", 13, Who.Everyone), (14, "Food", 14, Who.Everyone), (15, "Parties", 16, Who.Everyone), (16, "Style", 20, Who.Everyone),
+            (17, "Charisma", 26, Who.Everyone), (18, "Health", 54, Who.Everyone), (19, "Romance", 55, Who.Everyone)
+        };
+
+        private Texture2D BarsOn;
+        private Texture2D BarsOff;
+        private List<(UIClassicTip Tip, int Slot)> Shown = new List<(UIClassicTip, int)>();
+        private UILabel NoneLabel;
+        private string ShownFor;
+
+        public UIClassicInterestsPanel(TS1GameScreen game) : base(game)
+        {
+            BarsOn = Tex("InterestBars.bmp");
+            BarsOff = Tex("Backgrounds/InterestBarsBackground.bmp");
+            AddLabel(ClassicUIGraphics.GameString("Live.iff", 140, 0, "Interests"), 12, new Vector2(8, 1));
+            NoneLabel = AddLabel(ClassicUIGraphics.GameString("Live.iff", 134, 9, "Not Available to Pets"), 10, new Vector2(80, 40));
+        }
+
+        private static Vector2 CellPos(int i)
+        {
+            //five columns of three, the bar right of the picture
+            return new Vector2(16 + (i / 3) * 84, 20 + (i % 3) * 26);
+        }
+
+        public override void Update(UpdateState state)
+        {
+            base.Update(state);
+            var sim = Game.SelectedAvatar;
+            var who = (sim == null || sim.IsPet) ? "none" : (sim.IsChild ? "child" : "adult");
+            if (who == ShownFor) return;
+            ShownFor = who;
+            foreach (var cell in Shown) Remove(cell.Tip);
+            Shown.Clear();
+            NoneLabel.Visible = sim?.IsPet == true;
+            if (who == "none") return;
+            var mine = Interests.Where(x => x.Who == Who.Everyone || x.Who == ((who == "child") ? Who.Children : Who.Adults)).ToList();
+            for (int i = 0; i < mine.Count; i++)
+            {
+                var interest = mine[i];
+                var art = Tex("Buttons/Interest" + interest.Art + ".BMP");
+                var tip = new UIClassicTip(art, (art == null) ? Rectangle.Empty : new Rectangle(0, 0, art.Width / 3, art.Height), new Rectangle(0, 0, 70, 25),
+                    ClassicUIGraphics.GameString("Live.iff", 140, interest.Name) + ": " + ClassicUIGraphics.GameString("Live.iff", 142, interest.Name)) { Position = CellPos(i) };
+                Shown.Add((tip, interest.Slot));
+                Add(tip);
+            }
+        }
+
+        public override void Draw(UISpriteBatch batch)
+        {
+            base.Draw(batch);
+            if (!Visible) return;
+            var sim = Game.SelectedAvatar;
+            if (sim == null) return;
+            foreach (var cell in Shown)
+                DrawPoints(batch, BarsOff, BarsOn, cell.Tip.Position + new Vector2(29, 5), sim.GetPersonData((VMPersonDataVariable)cell.Slot)); //interests run 0 to 10
+        }
+    }
+
+    /// <summary>
+    /// The classic House panel: the game's five ratings of the house as 10 point bars, and its size, bedrooms,
+    /// bathrooms and lot. The names and descriptions are the game's (GameData/Live.iff, 133 and 135); the ratings are
+    /// Simitone's, from HouseStats, as the game works them out in its engine.
+    /// </summary>
+    public class UIClassicHousePanel : UIClassicSubpanel
+    {
+        private Texture2D BarsOn;
+        private Texture2D BarsOff;
+        private HouseStats Stats;
+        private float NextUpdate;
+        private UILabel[] Facts = new UILabel[4];
+
+        public UIClassicHousePanel(TS1GameScreen game) : base(game)
+        {
+            string str(int table, int i) => ClassicUIGraphics.GameString("Live.iff", (ushort)table, i);
+            BarsOn = Tex("HouseSubBars.bmp");
+            BarsOff = Tex("Backgrounds/HouseSubBarsOff.BMP");
+            AddLabel(str(133, 0), 12, new Vector2(8, 1));
+            for (int i = 0; i < 5; i++)
+            {
+                AddLabel(str(133, i + 1), 9, RatingPos(i) + new Vector2(-80, -2));
+                Add(new UIClassicTip(null, Rectangle.Empty, new Rectangle(-80, -2, 120, 16), str(135, i * 2) + ": " + str(135, i * 2 + 1)) { Position = RatingPos(i) });
+            }
+            for (int i = 0; i < 4; i++)
+            {
+                Facts[i] = AddLabel("", 9, new Vector2(300, 6 + i * 20));
+                Add(new UIClassicTip(null, Rectangle.Empty, new Rectangle(0, 0, 150, 18), str(135, 10 + i * 2) + ": " + str(135, 11 + i * 2)) { Position = Facts[i].Position });
+            }
+        }
+
+        private static Vector2 RatingPos(int i)
+        {
+            return new Vector2(230, 8 + i * 18);
+        }
+
+        public override void Update(UpdateState state)
+        {
+            base.Update(state);
+            //the ratings look over the whole lot, so not every frame
+            NextUpdate -= 1 / 60f;
+            if (NextUpdate > 0 && Stats != null) return;
+            NextUpdate = 1;
+            Stats = HouseStats.Of(Game.vm);
+            string str(int i) => ClassicUIGraphics.GameString("Live.iff", 133, i);
+            Facts[0].Caption = str(6).Replace("%d", Stats.SquareFeet.ToString());
+            Facts[1].Caption = str(7).Replace("%d", Stats.Bedrooms.ToString());
+            Facts[2].Caption = str(8).Replace("%d", Stats.Bathrooms.ToString());
+            Facts[3].Caption = str(9).Replace("%s", Stats.Lot.Width + " x " + Stats.Lot.Height);
+        }
+
+        public override void Draw(UISpriteBatch batch)
+        {
+            base.Draw(batch);
+            if (!Visible || Stats == null) return;
+            var ratings = new[] { Stats.Size, Stats.Furnishings, Stats.Yard, Stats.Upkeep, Stats.Layout };
+            for (int i = 0; i < 5; i++) DrawPoints(batch, BarsOff, BarsOn, RatingPos(i), ratings[i]);
+        }
+    }
+
+    /// <summary>
+    /// A part of a classic panel that explains itself in a tooltip when the mouse is over it, optionally with a picture.
+    /// </summary>
+    public class UIClassicTip : UIElement
+    {
+        private Texture2D Picture;
+        private Rectangle Source;
+
+        public UIClassicTip(Texture2D picture, Rectangle source, Rectangle area, string tooltip)
+        {
+            Picture = picture;
+            Source = source;
+            Tooltip = tooltip;
+            ListenForMouse(area, (type, state) => { });
+        }
+
+        public override void Draw(UISpriteBatch batch)
+        {
+            if (Visible && Picture != null) DrawLocalTexture(batch, Picture, Source, Vector2.Zero);
+        }
+    }
 }

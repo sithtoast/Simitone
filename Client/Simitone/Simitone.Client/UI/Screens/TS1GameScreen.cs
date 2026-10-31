@@ -28,6 +28,7 @@ using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using Simitone.Client.UI.Controls;
 using Simitone.Client.UI.Panels;
+using Simitone.Client.UI.Panels.Desktop;
 using Simitone.Client.UI.Panels.WorldUI;
 using Simitone.Client.Utils;
 using Simitone.Client.Services;
@@ -228,6 +229,15 @@ namespace Simitone.Client.UI.Screens
             Content.Get().Neighborhood.PreparePersonDataFromObject = PersonGeneratorHelper.PreparePersonDataFromObject;
             Content.Get().Neighborhood.AddMissingNeighbors();
             TS1NeighPanel = new UINeighborhoodSelectionPanel(neighborhoodMode);
+            var classic = GlobalSettings.Default.TS1ClassicUI && ClassicUIGraphics.Available;
+            SimitoneCursors.SetClassic(classic);
+            if (classic)
+            {
+                //the game's banner and house popups, which handle the clicks themselves
+                Add(TS1NeighPanel);
+                Add(new UIClassicNeighbourhood(this, TS1NeighPanel, neighborhoodMode));
+                return;
+            }
             var switcher = new UINeighbourhoodSwitcher(TS1NeighPanel, neighborhoodMode, moveInMode);
             TS1NeighPanel.OnHouseSelect += (house) =>
             {
@@ -281,7 +291,7 @@ namespace Simitone.Client.UI.Screens
             family.Budget += family.ValueInArch;
             family.ValueInArch = 0;
             Content.Get().Neighborhood.MoveOut(houseID);
-            TS1NeighPanel.SelectHouse(houseID);
+            if (TS1NeighPanel.ClassicClick == null) TS1NeighPanel.SelectHouse(houseID);
         }
 
         public override void GameResized()

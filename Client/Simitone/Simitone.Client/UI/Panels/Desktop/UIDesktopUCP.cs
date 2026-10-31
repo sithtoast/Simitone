@@ -94,6 +94,7 @@ namespace Simitone.Client.UI.Panels.Desktop
         {
             Game = screen;
             Classic = GlobalSettings.Default.TS1ClassicUI && ClassicUIGraphics.Available;
+            SimitoneCursors.SetClassic(Classic);
             if (Classic) InitClassic();
             else InitModern();
 

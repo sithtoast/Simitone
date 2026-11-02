@@ -1,35 +1,34 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
-  <dict>
-    <key>CFBundleName</key>
-    <string>Simitone</string>
-    <key>CFBundleDisplayName</key>
-    <string>Simitone</string>
-    <key>CFBundleIdentifier</key>
-    <string>com.simitone.Simitone</string>
-    <key>CFBundleExecutable</key>
-    <string>Simitone</string>
-    <key>CFBundleIconFile</key>
-    <string>Icon.icns</string>
-    <key>CFBundlePackageType</key>
-    <string>APPL</string>
-    <key>CFBundleShortVersionString</key>
-    <string>0.8.22</string>
-    <key>CFBundleVersion</key>
-    <string>0.8.22.3</string>
-    <key>CFBundleDevelopmentRegion</key>
-    <string>en</string>
-    <key>CFBundleInfoDictionaryVersion</key>
-    <string>6.0</string>
-    <key>LSApplicationCategoryType</key>
-    <string>public.app-category.simulation-games</string>
-    <!-- .NET 9 itself requires macOS 12+ -->
-    <key>LSMinimumSystemVersion</key>
-    <string>12.0</string>
-    <key>NSPrincipalClass</key>
-    <string>NSApplication</string>
-    <key>NSHumanReadableCopyright</key>
-    <string>Simitone contributors. The Sims is a trademark of Electronic Arts.</string>
-  </dict>
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleDisplayName</key>
+	<string>Simitone</string>
+	<key>CFBundleExecutable</key>
+	<string>Simitone</string>
+	<key>CFBundleIconFile</key>
+	<string>Icon.icns</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.simitone.Simitone</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>Simitone</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>0.8.22</string>
+	<key>CFBundleVersion</key>
+	<string>0.8.22.4</string>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.simulation-games</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>12.0</string>
+	<key>NSHumanReadableCopyright</key>
+	<string>Simitone contributors. The Sims is a trademark of Electronic Arts.</string>
+	<key>NSPrincipalClass</key>
+	<string>NSApplication</string>
+</dict>
 </plist>

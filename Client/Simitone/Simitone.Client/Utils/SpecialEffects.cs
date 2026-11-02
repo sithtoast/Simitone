@@ -112,6 +112,16 @@ namespace Simitone.Client.Utils
 
         public void Draw(GraphicsDevice device)
         {
+            var game = UIScreen.Current as TS1GameScreen;
+            if (PhotoFrame != null)
+            {
+                try
+                {
+                    if (game?.vm != null) SavePhoto(device, game.vm, PhotoFrame.Value, "", PhotoScale, PhotoJpeg);
+                }
+                catch (Exception) { }
+                PhotoFrame = null;
+            }
             if (SnapshotObject == null) return;
             //wait a frame, so the lot is drawn where the effect moved the camera
             if (!SnapshotNextFrame)
@@ -119,13 +129,36 @@ namespace Simitone.Client.Utils
                 SnapshotNextFrame = true;
                 return;
             }
-            var game = UIScreen.Current as TS1GameScreen;
             try
             {
                 if (game?.vm != null) SaveSnapshot(device, game);
             }
             catch (Exception) { }
             SnapshotObject = null;
+        }
+
+        private Rectangle? PhotoFrame;
+        private float PhotoScale;
+        private bool PhotoJpeg;
+
+        /// <summary>
+        /// The camera: photographs the lot inside the frame (in UI pixels) on the next frame, into the family's album.
+        /// </summary>
+        public void TakePhoto(Rectangle frame, float scale, bool jpeg)
+        {
+            PhotoFrame = frame;
+            PhotoScale = scale;
+            PhotoJpeg = jpeg;
+        }
+
+        /// <summary>
+        /// The family on the lot's folder in UserData/PhotoAlbum, named after the family.
+        /// </summary>
+        public static string AlbumPath(FSO.SimAntics.VM vm)
+        {
+            var family = vm?.TS1State?.CurrentFamily;
+            var familyName = (family == null) ? "Snapshots" : (FSO.Content.Content.Get().Neighborhood.GetFamilyString(family.ChunkID)?.GetString(0) ?? "Family " + family.ChunkID);
+            return Path.Combine(FSO.Content.Content.Get().Neighborhood.UserPath, "PhotoAlbum", Clean(familyName));
         }
 
         private void SaveSnapshot(GraphicsDevice device, TS1GameScreen game)
@@ -143,29 +176,70 @@ namespace Simitone.Client.Utils
                 centre += offset * world.State.PreciseZoom * (width / space.WorldPxWidth);
             }
             var size = (SnapshotSize > 1) ? new Point(480, 360) : new Point(320, 240);
-            size = new Point(Math.Min(size.X, width), Math.Min(size.Y, height));
-            var rect = new Rectangle((int)centre.X - size.X / 2, (int)centre.Y - size.Y / 2, size.X, size.Y);
-            rect.X = Math.Max(0, Math.Min(width - size.X, rect.X));
-            rect.Y = Math.Max(0, Math.Min(height - size.Y, rect.Y));
+            var dpi = FSO.Common.FSOEnvironment.DPIScaleFactor;
+            SavePhoto(device, game.vm, new Rectangle((int)(centre.X / dpi) - size.X / 2, (int)(centre.Y / dpi) - size.Y / 2, size.X, size.Y), SnapshotCaption, 1, false);
+        }
 
-            var data = new Color[size.X * size.Y];
+        /// <summary>
+        /// Saves part of the lot as drawn (the UI isn't drawn yet), named with the time and the caption.
+        /// </summary>
+        private void SavePhoto(GraphicsDevice device, FSO.SimAntics.VM vm, Rectangle frame, string caption, float scale, bool jpeg)
+        {
+            var width = device.PresentationParameters.BackBufferWidth;
+            var height = device.PresentationParameters.BackBufferHeight;
+            //from UI pixels to the back buffer's, kept on screen
+            var dpi = FSO.Common.FSOEnvironment.DPIScaleFactor;
+            var rect = new Rectangle((int)(frame.X * dpi), (int)(frame.Y * dpi), (int)(frame.Width * dpi), (int)(frame.Height * dpi));
+            rect.Width = Math.Min(rect.Width, width);
+            rect.Height = Math.Min(rect.Height, height);
+            rect.X = Math.Max(0, Math.Min(width - rect.Width, rect.X));
+            rect.Y = Math.Max(0, Math.Min(height - rect.Height, rect.Y));
+
+            var data = new Color[rect.Width * rect.Height];
             device.GetBackBufferData(rect, data, 0, data.Length);
             for (int i = 0; i < data.Length; i++) data[i].A = 255;
 
-            var family = game.vm.TS1State.CurrentFamily;
-            var familyName = (family == null) ? "Snapshots" : (FSO.Content.Content.Get().Neighborhood.GetFamilyString(family.ChunkID)?.GetString(0) ?? "Family " + family.ChunkID);
-            var folder = Path.Combine(FSO.Content.Content.Get().Neighborhood.UserPath, "PhotoAlbum", Clean(familyName));
+            var folder = AlbumPath(vm);
             Directory.CreateDirectory(folder);
-            var name = DateTime.Now.ToString("yyyy-MM-dd HH-mm-ss") + (SnapshotCaption == "" ? "" : " " + Clean(SnapshotCaption));
-            using (var tex = new Texture2D(device, size.X, size.Y))
-            using (var file = File.Create(Path.Combine(folder, name + ".png")))
+            var name = DateTime.Now.ToString("yyyy-MM-dd HH-mm-ss") + (caption == "" ? "" : " " + Clean(caption));
+            var path = Path.Combine(folder, name + (jpeg ? ".jpg" : ".png"));
+            for (int n = 2; File.Exists(path); n++) path = Path.Combine(folder, name + " " + n + (jpeg ? ".jpg" : ".png"));
+            var w = rect.Width;
+            var h = rect.Height;
+            if (scale < 1) data = Shrink(data, ref w, ref h, scale);
+            using (var tex = new Texture2D(device, w, h))
+            using (var file = File.Create(path))
             {
                 tex.SetData(data);
-                tex.SaveAsPng(file, size.X, size.Y);
+                if (jpeg) tex.SaveAsJpeg(file, w, h);
+                else tex.SaveAsPng(file, w, h);
             }
         }
 
-        private static string Clean(string name)
+        /// <summary>
+        /// A smaller copy of a picture, each pixel the average of the ones it covers.
+        /// </summary>
+        private static Color[] Shrink(Color[] data, ref int width, ref int height, float scale)
+        {
+            int w = Math.Max(1, (int)(width * scale)), h = Math.Max(1, (int)(height * scale));
+            var result = new Color[w * h];
+            for (int y = 0; y < h; y++)
+            {
+                for (int x = 0; x < w; x++)
+                {
+                    int x0 = x * width / w, x1 = Math.Max(x0 + 1, (x + 1) * width / w);
+                    int y0 = y * height / h, y1 = Math.Max(y0 + 1, (y + 1) * height / h);
+                    Vector4 sum = Vector4.Zero;
+                    for (int sy = y0; sy < y1; sy++) for (int sx = x0; sx < x1; sx++) sum += data[sy * width + sx].ToVector4();
+                    result[y * w + x] = new Color(sum / ((x1 - x0) * (y1 - y0)));
+                }
+            }
+            width = w;
+            height = h;
+            return result;
+        }
+
+        public static string Clean(string name)
         {
             var bad = Path.GetInvalidFileNameChars().Concat(new[] { ':', '/', '\\', '?', '*', '"', '<', '>', '|' }).ToArray();
             return new string(name.Select(x => bad.Contains(x) ? '_' : x).ToArray()).Trim();

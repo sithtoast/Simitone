@@ -28,6 +28,7 @@ using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using Simitone.Client.UI.Controls;
 using Simitone.Client.UI.Panels;
+using Simitone.Client.UI.Panels.Desktop;
 using Simitone.Client.UI.Panels.WorldUI;
 using Simitone.Client.Utils;
 using Simitone.Client.Services;
@@ -204,6 +205,7 @@ namespace Simitone.Client.UI.Screens
 
             if (Content.Get().TS1)
             {
+                RestoreNeighbourhood();
                 NeighSelection(mode);
 
                 // Check for updates from GitHub releases
@@ -228,6 +230,15 @@ namespace Simitone.Client.UI.Screens
             Content.Get().Neighborhood.PreparePersonDataFromObject = PersonGeneratorHelper.PreparePersonDataFromObject;
             Content.Get().Neighborhood.AddMissingNeighbors();
             TS1NeighPanel = new UINeighborhoodSelectionPanel(neighborhoodMode);
+            var classic = GlobalSettings.Default.TS1ClassicUI && ClassicUIGraphics.Available;
+            SimitoneCursors.SetClassic(classic);
+            if (classic)
+            {
+                //the game's banner and house popups, which handle the clicks themselves
+                Add(TS1NeighPanel);
+                Add(new UIClassicNeighbourhood(this, TS1NeighPanel, neighborhoodMode));
+                return;
+            }
             var switcher = new UINeighbourhoodSwitcher(TS1NeighPanel, neighborhoodMode, moveInMode);
             TS1NeighPanel.OnHouseSelect += (house) =>
             {
@@ -259,6 +270,59 @@ namespace Simitone.Client.UI.Screens
             if (TestMode.TakeLot(out var testLot)) PlayHouse(testLot, switcher);
         }
 
+        /// <summary>
+        /// Switches to another of the player's neighbourhoods (0 is UserData, 1 UserData2, and so on), from the classic
+        /// neighbourhood screen, which is replaced along with the view.
+        /// </summary>
+        public void SwitchNeighbourhood(int id, UIElement screen)
+        {
+            Remove(TS1NeighPanel);
+            Remove(screen);
+            Content.Get().Neighborhood.InitSpecific(id);
+            GlobalSettings.Default.TS1Neighbourhood = id;
+            GlobalSettings.Default.Save();
+            NeighSelection(4);
+        }
+
+        private static bool NeighbourhoodRestored;
+
+        /// <summary>
+        /// The classic neighbourhood can switch between the player's neighbourhoods, so the game starts in the one played
+        /// last, as the original does. Only once, when the game starts: the setting is kept up to date after that.
+        /// </summary>
+        private static void RestoreNeighbourhood()
+        {
+            if (NeighbourhoodRestored) return;
+            NeighbourhoodRestored = true;
+            var id = GlobalSettings.Default.TS1Neighbourhood;
+            if (!GlobalSettings.Default.TS1ClassicUI || !ClassicUIGraphics.Available || id == 0) return;
+            if (UIClassicNeighbourhood.Neighbourhoods().Contains(id)) Content.Get().Neighborhood.InitSpecific(id);
+        }
+
+        private int BulldozeStep; //0 none; 1 waiting for the lot; then frames since it was emptied
+
+        /// <summary>
+        /// The neighbourhood's Bulldoze: opens the house, empties it (Bulldozer), saves it and returns.
+        /// </summary>
+        public void BulldozeHouse(short house, UIElement switcher)
+        {
+            Bulldozer.Backup(house);
+            BulldozeStep = 1;
+            PlayHouse(house, switcher);
+        }
+
+        private void UpdateBulldoze()
+        {
+            //the house arrives a tick after the lot opens (VMBlueprintRestoreCmd)
+            if (BulldozeStep == 0 || vm == null || !vm.Ready || vm.Context.Blueprint == null || vm.Entities.Count == 0) return;
+            if (BulldozeStep == 1) Bulldozer.Clear(vm);
+            //a few frames for the world to redraw without the house, for the saved thumbnail
+            if (++BulldozeStep < 6) return;
+            BulldozeStep = 0;
+            Save();
+            ExitLot();
+        }
+
         public void PlayHouse(short house, UIElement switcher)
         {
             ActiveFamily = Content.Get().Neighborhood.GetFamilyForHouse((short)house);
@@ -282,7 +346,7 @@ namespace Simitone.Client.UI.Screens
             family.Budget += family.ValueInArch;
             family.ValueInArch = 0;
             Content.Get().Neighborhood.MoveOut(houseID);
-            TS1NeighPanel.SelectHouse(houseID);
+            if (TS1NeighPanel.ClassicClick == null) TS1NeighPanel.SelectHouse(houseID);
         }
 
         public override void GameResized()
@@ -451,6 +515,7 @@ namespace Simitone.Client.UI.Screens
             base.Update(state);
             UpdateAutoFastForward();
             UpdateBackgroundPause();
+            UpdateBulldoze();
             Undo?.Update();
 
             // Update weather effects (sounds and terrain)

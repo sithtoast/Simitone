@@ -2,6 +2,8 @@ using FSO.Client;
 using FSO.Content;
 using FSO.Files;
 using FSO.Files.FAR1;
+using FSO.Files.Formats.IFF;
+using FSO.Files.Formats.IFF.Chunks;
 using Microsoft.Xna.Framework.Graphics;
 using System;
 using System.Collections.Generic;
@@ -72,6 +74,32 @@ namespace Simitone.Client.Utils
                     .FirstOrDefault(x => string.Equals(Path.GetFileName(x), part, StringComparison.OrdinalIgnoreCase));
             }
             return (path != null && File.Exists(path)) ? path : null;
+        }
+
+        private static Dictionary<string, IffFile> GameData = new Dictionary<string, IffFile>(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// One of the game's data files from GameData, such as "Live.iff" (the live mode panels' text), or null.
+        /// </summary>
+        public static IffFile GetGameData(string name)
+        {
+            if (GameData.TryGetValue(name, out var iff)) return iff;
+            var path = FindGameFile("GameData", name);
+            try
+            {
+                if (path != null) iff = new IffFile(path);
+            }
+            catch (Exception) { }
+            GameData[name] = iff;
+            return iff;
+        }
+
+        /// <summary>
+        /// A string from one of the game's data files (see GetGameData), or the fallback if it isn't there.
+        /// </summary>
+        public static string GameString(string file, ushort table, int index, string fallback = "")
+        {
+            return GetGameData(file)?.Get<STR>(table)?.GetString(index) ?? fallback;
         }
 
         /// <summary>

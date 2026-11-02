@@ -40,8 +40,9 @@ namespace Simitone.Client.UI.Panels.Desktop
         private Texture2D Frame;
         private Texture2D ThumbBack;
 
-        //live mode panels, by the UIMainPanel live category IDs (0 motives, 1 job, 2 personality, 3 relationships, 4 inventory)
-        private UIButton[] PanelButtons = new UIButton[5];
+        //live mode panels, by the UIMainPanel live category IDs (0 motives, 1 job, 2 personality, 3 relationships, 4 inventory),
+        //then the classic UI's own (5 interests, 6 house)
+        private UIButton[] PanelButtons = new UIButton[7];
         private int PanelID = -1;
         private UIElement Panel;
         private int PanelWidth; //the space the open panel was made for
@@ -75,12 +76,12 @@ namespace Simitone.Client.UI.Panels.Desktop
                 return b;
             }
             btn("Mood.bmp", 7, 30, 0, "Mood");
-            btn("Interest.bmp", 43, 3, -1, "Interests");
+            btn("Interest.bmp", 43, 3, 5, "Interests");
             btn("Relationship.BMP", 76, 3, 3, "Relationships");
             btn("Personality.bmp", 43, 34, 2, "Personality");
             btn("Job.bmp", 76, 34, 1, "Job");
             btn("Gift.bmp", 43, 65, 4, "Inventory");
-            btn("House.bmp", 76, 65, -1, "House");
+            btn("House.bmp", 76, 65, 6, "House");
 
             GameResized();
             ShowPanel(0);
@@ -112,6 +113,8 @@ namespace Simitone.Client.UI.Panels.Desktop
                 case 1: Panel = new UIClassicJobPanel(Game); break;
                 case 2: Panel = new UIClassicPersonalityPanel(Game); break;
                 case 3: Panel = new UIClassicRelationshipPanel(Game, PanelWidth); break;
+                case 5: Panel = new UIClassicInterestsPanel(Game); break;
+                case 6: Panel = new UIClassicHousePanel(Game); break;
                 default: Panel = new UIClassicInventoryPanel(Game, PanelWidth); break;
             }
             Panel.Position = new Vector2(PanelX, 0);
